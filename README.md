@@ -2,7 +2,6 @@
 
 **Nhấn để nói, thả để phát giọng nói lên loa Google Cast ngay trong Home Assistant.**
 
-[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=khaisilk1910&repository=P2Talk-Google-Cast&category=integration)
 
 ## Tính năng
 
@@ -20,7 +19,9 @@
 
 ### Cài đặt nhanh — Add to HACS
 
-Nhấn nút **Add to HACS** ở đầu trang, chọn Home Assistant của bạn, xác nhận thêm repository và chọn **Download**. Nút mở trang repository trong HACS (hoặc Marketplace ở phiên bản tương thích); **không tự động cài đặt mà không xác nhận**.
+Nhấn nút **Add to HACS**, chọn Home Assistant của bạn, xác nhận thêm repository và chọn **Download**. Nút mở trang repository trong HACS (hoặc Marketplace ở phiên bản tương thích); **không tự động cài đặt mà không xác nhận**.
+
+[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=khaisilk1910&repository=P2Talk-Google-Cast&category=integration)
 
 ### Cài đặt thủ công qua HACS
 
