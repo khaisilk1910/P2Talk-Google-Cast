@@ -33,6 +33,7 @@ const glyphs = {
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 11v6m0-10h.01"/>',
   lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
   wifi: '<path d="M2 8.8a15 15 0 0 1 20 0M5 12a10.5 10.5 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M12 19.5h.01"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
 };
 function icon(name, className = "") {
   return `<svg class="svg-icon ${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${glyphs[name]}</svg>`;
@@ -132,6 +133,28 @@ function microphoneAdvice(error, environment = microphoneEnvironment()) {
 
 
 const styles = `
+/* Home Assistant custom panels own their narrow-screen navigation.
+   Keep HA's native drawer, never make a competing sidebar or navigate the page. */
+.ha-toolbar { display:none; height:56px; min-height:56px; padding:0 12px; box-sizing:border-box;
+  align-items:center; gap:12px; position:relative; z-index:5;
+  background:var(--app-header-background-color,var(--primary-background-color,#fff));
+  color:var(--app-header-text-color,var(--primary-text-color,#222));
+  border-bottom:1px solid var(--divider-color,rgba(120,130,150,.22));
+  font-size:18px; font-weight:600; }
+:host([data-show-panel-bar="true"]) .ha-toolbar { display:flex; }
+.ha-menu-button { display:grid; place-items:center; flex:none; width:44px; height:44px; padding:0;
+  border:0; background:transparent; border-radius:50%; cursor:pointer;
+  color:inherit; touch-action:manipulation; }
+.ha-menu-button:hover { background:color-mix(in srgb,currentColor 9%,transparent); }
+.ha-menu-button:active { background:color-mix(in srgb,currentColor 16%,transparent); }
+.ha-menu-button .svg-icon { width:24px; height:24px; }
+.ha-menu-button:focus-visible { outline:2px solid var(--primary-color,#03a9f4); outline-offset:2px; }
+.ha-toolbar-title { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+:host([data-show-panel-bar="true"]) .wrap { min-height:calc(100% - 56px); }
+@media (max-width: 680px) {
+  :host([data-show-panel-bar="true"]) .wrap { padding:12px 10px max(18px,env(safe-area-inset-bottom)); }
+  :host([data-show-panel-bar="true"]) .surface { border-radius:23px; }
+}
 :host { display:block; min-height:100%; color:var(--primary-text-color,#17243a); font-family:var(--paper-font-body1_-_font-family,system-ui,-apple-system,'Segoe UI',sans-serif); --pt-primary:var(--primary-color,#2782ee); --pt-accent:var(--accent-color,#7965e9); --pt-ink:var(--primary-text-color,#17243a); --pt-muted:var(--secondary-text-color,#63738a); --pt-card:var(--card-background-color,#fff); --pt-border:var(--divider-color,#d7e0ed); --pt-tint:color-mix(in srgb,var(--pt-card) 93%,var(--pt-primary) 7%); }
 * { box-sizing:border-box; }
 button,select,input { font:inherit; }
@@ -480,7 +503,8 @@ h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; mar
 .mic-help p { margin:7px 0; }
 .mic-help a { color:var(--pt-primary); font-weight:720; }
 .mic-help pre { padding:9px 11px; max-width:100%; overflow-x:auto; white-space:pre-wrap; word-break:break-word; border:1px solid var(--pt-border); border-radius:9px; color:var(--pt-muted); font:11px/1.5 ui-monospace,monospace; }
-.mic-help .copy-diagnostics { margin-top:2px; border:1px solid var(--pt-border); background:var(--pt-card); color:var(--pt-ink); padding:7px 10px; border-radius:9px; cursor:pointer; font-size:12px; font-weight:730; }
+.mic-help .copy-diagnostics[hidden] { display:none; }
+.mic-help .copy-diagnostics { display:inline-flex; align-items:center; text-decoration:none; margin-top:2px; border:1px solid var(--pt-border); background:var(--pt-card); color:var(--pt-ink); padding:7px 10px; border-radius:9px; cursor:pointer; font-size:12px; font-weight:730; }
 
 
 /* 2026 Aurora Refresh: speaker-first identity, contiguous hero/body, reactive effects.
@@ -694,6 +718,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._hass = null;
+    this._narrow = false;
     this._loaded = false;
     this._loadingSpeakers = false;
     this._recording = false;
@@ -708,7 +733,6 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._configuredSpeakers = [];
     this._micHttpsUrl = null;
     this._micHttpsState = "unknown";
-    this._redirecting = false;
     this._timer = null;
     this._started = 0;
   }
@@ -718,14 +742,40 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     if (typeof hass?.themes?.darkMode === "boolean") {
       this.setAttribute("data-dark", hass.themes.darkMode ? "true" : "false");
     }
+    this._syncNativeNavigation();
     if (this.isConnected && !this._loaded) this._loadSpeakers();
     else if (this.isConnected && this._loaded) this._syncSpeakerState();
   }
   get hass() { return this._hass; }
 
+  // HA delivers this value whenever its responsive navigation mode changes.
+  set narrow(value) {
+    this._narrow = Boolean(value);
+    this._syncNativeNavigation();
+  }
+  get narrow() { return this._narrow; }
+
+  _syncNativeNavigation() {
+    // Respect Home Assistant's own drawer state. On wide screens with a docked
+    // sidebar, the existing HA sidebar stays visible; do not draw a second one.
+    const showBar = this._narrow || this._hass?.dockedSidebar === "always_hidden";
+    if (showBar && !this.hasAttribute("data-show-panel-bar")) this.setAttribute("data-show-panel-bar", "true");
+    else if (!showBar && this.hasAttribute("data-show-panel-bar")) this.removeAttribute("data-show-panel-bar");
+  }
+
+  _toggleNativeSidebar() {
+    // Home Assistant handles the drawer, its close behavior and navigation.
+    // No hardcoded DOM selectors, location changes or page reloads.
+    this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
+  }
+
   connectedCallback() {
     this.shadowRoot.innerHTML = `
       <style>${styles}</style>
+      <nav class="ha-toolbar" aria-label="Điều hướng Home Assistant">
+        <button id="haMenuButton" type="button" class="ha-menu-button" title="Mở menu Home Assistant" aria-label="Mở menu Home Assistant">${icon("menu")}</button>
+        <span class="ha-toolbar-title">P2Talk Google Cast</span>
+      </nav>
       <div class="wrap"><main class="surface">
         <header class="head">
           <div class="hero-glow" aria-hidden="true"></div>
@@ -754,7 +804,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng loa</button></div>
         <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><div class="status-copy"><strong id="statusText" class="status-content">Đang kết nối Home Assistant...</strong><small id="statusNote">Đang kiểm tra quyền truy cập và thiết bị.</small></div><span class="status-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
         <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro & cách khắc phục</summary>
-          <p id="micAction"></p><button type="button" class="copy-diagnostics" id="micHttps" hidden>Mở P2Talk qua HTTPS</button><pre id="micDetails"></pre>
+          <p id="micAction"></p><a class="copy-diagnostics" id="micHttps" href="#" target="_blank" rel="noopener noreferrer" hidden>Mở P2Talk bằng HTTPS (tab mới)</a><pre id="micDetails"></pre>
           <button id="micCopy" type="button" class="copy-diagnostics">Sao chép chẩn đoán</button>
           <p><a href="https://www.home-assistant.io/docs/configuration/remote/" target="_blank" rel="noopener noreferrer">Hướng dẫn HTTPS/Home Assistant</a></p>
           <p>Lỗi ghi âm xảy ra ở thiết bị đang mở giao diện; nó có thể không xuất hiện trong log Home Assistant Core.</p>
@@ -764,8 +814,9 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         </div>
       </main></div>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
+    this.$("haMenuButton").addEventListener("click", () => this._toggleNativeSidebar());
+    this._syncNativeNavigation();
     this.$("refresh").addEventListener("click", () => this._loadSpeakers());
-    this.$("micHttps").addEventListener("click", () => this._openSecurePanel());
     this.$("micCopy").addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(this.$("micDetails").textContent);
@@ -854,7 +905,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     const speaker = this._configuredSpeakers.find((entry) => entry.entity_id === entityId);
     const state = this._hass?.states?.[entityId]?.state || speaker?.state;
     const selected = !!speaker?.is_available && state !== "unknown" && state !== "unavailable";
-    this.$("mic").disabled = this._redirecting || this._recording || this._sending || !selected;
+    this.$("mic").disabled = this._recording || this._sending || !selected;
     // While recording, keep the same pressed button operable for pointerup.
     if (this._recording) this.$("mic").disabled = false;
     this.$("speaker").disabled = this._recording || this._sending;
@@ -865,7 +916,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
   }
 
   async _loadSpeakers(silent = false) {
-    if (!this._hass || this._loadingSpeakers || this._redirecting || !this.isConnected) return;
+    if (!this._hass || this._loadingSpeakers || !this.isConnected) return;
     this._loadingSpeakers = true;
     if (!silent) this._status("Đang đọc thiết bị từ Home Assistant...", "loading");
     try {
@@ -874,13 +925,22 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._maxBytes = response.max_bytes || this._maxBytes;
       this._micHttpsUrl = safeHttpsPanelUrl(response.mic_https_url);
       this._micHttpsState = this._micHttpsUrl ? response.mic_https_state : "missing";
-      // Prefer a secure Home Assistant origin on panel OPEN, not on the first
-      // microphone press. This request runs only after opening the P2Talk panel
-      // (not while Home Assistant boots or another dashboard is displayed).
-      // Reuse the existing speakers WebSocket response; no extra API call.
-      if (!window.isSecureContext && this._micHttpsUrl && this._openSecurePanel()) return;
+      // Never navigate the Home Assistant top-level window from a sidebar panel.
+      // When opened over HTTP, a new HTTPS browser context is required for mic
+      // permission. Offer an explicit safe link; do not reload other dashboards.
+      // This reuses the existing speakers WS response, without extra requests.
       this._loaded = true;
-      this.$("micHttps").hidden = !this._micHttpsUrl;
+      const secureLink = this.$("micHttps");
+      const insecure = !window.isSecureContext;
+      secureLink.hidden = !insecure || !this._micHttpsUrl;
+      if (this._micHttpsUrl) secureLink.href = this._micHttpsUrl;
+      else secureLink.removeAttribute("href");
+      const microphoneHelp = this.$("micHelp");
+      microphoneHelp.hidden = !insecure;
+      microphoneHelp.open = insecure;
+      if (insecure) this.$("micAction").textContent = this._micHttpsUrl
+        ? "Trang Home Assistant đang mở bằng HTTP LAN nên không thể dùng micro. Chọn 'Mở P2Talk bằng HTTPS (tab mới)' để ghi âm; dashboard hiện tại sẽ không bị tải lại. Để không cần mở tab mới, đặt HTTPS làm địa chỉ truy cập Home Assistant ngay từ đầu."
+        : "Home Assistant chưa cấu hình URL HTTPS. Vào Settings → System → Network → Home Assistant URL → Internet và khai báo địa chỉ HTTPS hợp lệ. P2Talk không tự chuyển trang hay làm mới dashboard.";
       const select = this.$("speaker");
       const previous = select.value || readSpeakerPreference();
       select.replaceChildren();
@@ -906,13 +966,12 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._syncSpeakerState();
       if (!this._recording && !this._sending) {
         const available = speakers.some((s) => s.is_available);
-        const insecure = !window.isSecureContext;
         if (insecure && !this._micHttpsUrl) {
           this._status("Home Assistant chưa cấu hình tên miền HTTPS cho P2Talk.", "error",
             "Vào Settings → System → Network → Home Assistant URL → Internet, nhập tên miền HTTPS và lưu. Không cần cấu hình URL trong P2Talk.");
         } else this._status(available ? (
           insecure ? (this._micHttpsUrl
-            ? "Không mở được HTTPS tự động. Hãy chọn nút Mở P2Talk qua HTTPS trong chẩn đoán."
+            ? "Micro cần HTTPS. Hãy dùng liên kết Mở P2Talk bằng HTTPS bên dưới (không tải lại Home Assistant)."
             : "Home Assistant chưa cấu hình địa chỉ HTTPS. Vào Settings → System → Network → Home Assistant URL → Internet để thêm tên miền HTTPS.")
             : "Sẵn sàng. Nhấn giữ micro để nói."
         ) : (speakers.length ? "Các loa đã thêm đều offline/không hỗ trợ phát. Kiểm tra Google Cast." :
@@ -958,27 +1017,6 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._refreshControls();
   }
 
-  _openSecurePanel() {
-    // Switching an existing HTTP document to HTTPS requires a top-level
-    // navigation. Never attempt an insecure iframe or an HTTPS audio-only API.
-    if (window.isSecureContext || this._redirecting) return false;
-    const target = safeHttpsPanelUrl(this._micHttpsUrl);
-    if (!target) return false;
-    this._redirecting = true;
-    this._status("Đang mở P2Talk bằng HTTPS Home Assistant...", "loading",
-      "Tự động chuyển sang kết nối bảo mật trước khi ghi âm. Không cần nhấn micro.");
-    try {
-      // Replace the HTTP history entry so Back does not bounce through P2Talk.
-      window.location.replace(target);
-      return true;
-    } catch (_) {
-      this._redirecting = false;
-      this._status("Không thể mở P2Talk qua HTTPS tự động.", "error",
-        "Kiểm tra URL tại Settings → System → Network và truy cập Home Assistant bằng tên miền HTTPS.");
-      return false;
-    }
-  }
-
   async _showMicrophoneFailure(error) {
     const environment = microphoneEnvironment();
     const advice = microphoneAdvice(error, environment);
@@ -989,9 +1027,10 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this.$("micAction").textContent = missingHttps
       ? "Home Assistant CHƯA cấu hình tên miền HTTPS. Vào Settings → System → Network → Home Assistant URL → Internet, nhập https://tên-miền-của-bạn và lưu. Sau đó tải lại P2Talk. Không cần nhập URL trong cấu hình tích hợp."
       : advice.code === "insecure_context" && this._micHttpsUrl
-        ? "Nhấn nút bên dưới để mở P2Talk qua HTTPS đã cấu hình trong Home Assistant. Sau khi mở trang HTTPS, cấp quyền micro nếu được hỏi."
+        ? "Dùng liên kết bên dưới để mở P2Talk HTTPS trong tab mới, giữ nguyên Home Assistant hiện tại. Ở tab HTTPS, cấp quyền micro nếu được hỏi."
         : advice.action;
     this.$("micHttps").hidden = !(advice.code === "insecure_context" && this._micHttpsUrl);
+    if (this._micHttpsUrl) this.$("micHttps").href = this._micHttpsUrl;
     this.$("micCopy").textContent = "Sao chép chẩn đoán";
     let permission = "not available";
     try {
@@ -1027,10 +1066,10 @@ class P2TalkGoogleCastPanel extends HTMLElement {
 
   async _startRecording() {
     if (this._recording || this._sending || !this.$("speaker").value || this._pressed) return;
-    // An HTTP IP page cannot obtain microphone permission by sending data to
-    // HTTPS; instead reload the panel itself at the trusted HTTPS origin.
+    // Never navigate the full HA app from a mic gesture. HTTPS must be the
+    // document origin; background fetch, iframe and WSS cannot grant mic access.
     if (!window.isSecureContext) {
-      if (!this._openSecurePanel()) await this._showMicrophoneFailure(new Error("insecure_context"));
+      await this._showMicrophoneFailure(new Error("insecure_context"));
       return;
     }
     this._pressed = true;
