@@ -132,7 +132,8 @@ def ws_speakers(hass: HomeAssistant, connection, msg) -> None:
         "max_seconds": runtime.entry.options.get(CONF_MAX_RECORD_SECONDS, DEFAULTS[CONF_MAX_RECORD_SECONDS]),
         "default_volume": runtime.entry.options.get(CONF_DEFAULT_VOLUME, DEFAULTS[CONF_DEFAULT_VOLUME]),
         "max_bytes": MAX_AUDIO_BYTES,
-        "mic_https_url": https_panel_url,
+        "mic_https_configured": https_panel_url is not None,
+        "mic_https_panel_url": https_panel_url,  # validated Home Assistant-managed HTTPS panel URL
         "mic_https_state": https_source,  # external, internal, or missing
     })
 
