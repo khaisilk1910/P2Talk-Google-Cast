@@ -34,11 +34,15 @@ Nhấn nút **Add to HACS** ở đầu trang, chọn Home Assistant của bạn,
 
 ## Microphone qua HTTPS tự động
 
-P2Talk dùng microphone của điện thoại/trình duyệt thông qua Home Assistant, không tạo API hoặc dịch vụ âm thanh riêng. Nếu đang mở panel qua IP HTTP, **nhấn nút micro sẽ mở lại P2Talk tại URL HTTPS đã cấu hình**, sau đó nhấn giữ để ghi âm. Không thể ghi âm từ trang HTTP bằng cách chỉ chuyển upload sang HTTPS.
+P2Talk dùng microphone của điện thoại/trình duyệt thông qua Home Assistant, không tạo API hoặc dịch vụ âm thanh riêng. Khi mở panel P2Talk từ IP HTTP và Home Assistant đã có địa chỉ HTTPS, **panel tự động chuyển sang HTTPS ngay lúc mở**, không chờ nhấn nút micro. Nếu Home Assistant đã được mở bằng HTTPS ngay từ đầu, không cần chuyển trang. Không thể ghi âm từ trang HTTP bằng cách chỉ chuyển upload sang HTTPS.
 
-**Không cần khai báo HTTPS trong P2Talk.** Tích hợp tự đọc URL HTTPS từ **Settings → System → Network → Home Assistant URL**, ưu tiên địa chỉ **Internet/External URL** rồi đến địa chỉ **Local network/Internal URL** nếu địa chỉ đó dùng HTTPS. Nếu chưa cấu hình URL HTTPS, khi mở P2Talk bằng HTTP LAN, giao diện sẽ báo rõ vị trí cần thiết lập. Sau khi mở HTTPS có thể cần đăng nhập lại do khác origin.
+**Không cần khai báo HTTPS trong P2Talk.** Tích hợp tự đọc URL HTTPS từ **Settings → System → Network → Home Assistant URL**, ưu tiên địa chỉ **Internet/External URL** rồi đến địa chỉ **Local network/Internal URL** nếu địa chỉ đó dùng HTTPS. Nếu chưa cấu hình URL HTTPS, khi mở P2Talk bằng HTTP LAN, giao diện sẽ báo rõ vị trí cần thiết lập. Việc chuyển từ HTTP sang HTTPS bắt buộc phải điều hướng trình duyệt một lần; không thể vừa giữ nguyên trang HTTP vừa cấp quyền micro. Để tránh hoàn toàn lần điều hướng này, đặt HTTPS làm URL mở Home Assistant trong Companion App/trình duyệt, và dùng Split DNS + reverse proxy HTTPS nội bộ để đi LAN khi ở nhà. Sau khi mở HTTPS có thể cần đăng nhập lại do khác origin.
 
 **Cloudflare Tunnel:** Nếu HTTPS của bạn đi qua Tunnel, bản ghi vẫn đi qua Cloudflare khi tên miền phân giải ra Cloudflare. Muốn đường truyền audio đi hoàn toàn trong LAN, dùng Split DNS trỏ tên miền HTTPS về reverse proxy LAN có chứng chỉ tin cậy. Không thể bảo đảm hoàn toàn local chỉ bằng thay đổi frontend.
+
+### Không ảnh hưởng Home Assistant startup / dashboard
+
+P2Talk chỉ kiểm tra HTTPS **khi panel của P2Talk được mở**, bằng chính phản hồi WebSocket danh sách loa có sẵn; không thêm HTTP request, tiến trình nền hoặc logic chạy tại trang dashboard khác. Nếu đang mở Home Assistant bằng `http://IP-LAN`, chỉ panel P2Talk tự động điều hướng sang URL HTTPS do Home Assistant khai báo (ưu tiên External URL rồi Internal URL HTTPS). Để Home Assistant và mọi dashboard mở luôn bằng HTTPS mà không điều hướng, cấu hình URL kết nối HTTPS trong Companion App và DNS nội bộ phân giải đúng về reverse proxy LAN. Đây là cấu hình mạng, không thể áp đặt toàn ứng dụng chỉ từ custom integration.
 
 ## Khắc phục lỗi microphone
 

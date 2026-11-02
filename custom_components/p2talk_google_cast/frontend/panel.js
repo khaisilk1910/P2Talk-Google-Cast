@@ -506,6 +506,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._configuredSpeakers = [];
     this._micHttpsUrl = null;
     this._micHttpsState = "unknown";
+    this._redirecting = false;
     this._timer = null;
     this._started = 0;
   }
@@ -651,7 +652,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     const speaker = this._configuredSpeakers.find((entry) => entry.entity_id === entityId);
     const state = this._hass?.states?.[entityId]?.state || speaker?.state;
     const selected = !!speaker?.is_available && state !== "unknown" && state !== "unavailable";
-    this.$("mic").disabled = this._recording || this._sending || !selected;
+    this.$("mic").disabled = this._redirecting || this._recording || this._sending || !selected;
     // While recording, keep the same pressed button operable for pointerup.
     if (this._recording) this.$("mic").disabled = false;
     this.$("speaker").disabled = this._recording || this._sending;
@@ -662,16 +663,21 @@ class P2TalkGoogleCastPanel extends HTMLElement {
   }
 
   async _loadSpeakers(silent = false) {
-    if (!this._hass || this._loadingSpeakers || !this.isConnected) return;
+    if (!this._hass || this._loadingSpeakers || this._redirecting || !this.isConnected) return;
     this._loadingSpeakers = true;
     if (!silent) this._status("Đang đọc thiết bị từ Home Assistant...", "loading");
     try {
       const response = await this._hass.callWS({ type: `${DOMAIN}/speakers` });
-      this._loaded = true;
       this._maxSeconds = response.max_seconds || 120;
       this._maxBytes = response.max_bytes || this._maxBytes;
       this._micHttpsUrl = safeHttpsPanelUrl(response.mic_https_url);
       this._micHttpsState = this._micHttpsUrl ? response.mic_https_state : "missing";
+      // Prefer a secure Home Assistant origin on panel OPEN, not on the first
+      // microphone press. This request runs only after opening the P2Talk panel
+      // (not while Home Assistant boots or another dashboard is displayed).
+      // Reuse the existing speakers WebSocket response; no extra API call.
+      if (!window.isSecureContext && this._micHttpsUrl && this._openSecurePanel()) return;
+      this._loaded = true;
       this.$("micHttps").hidden = !this._micHttpsUrl;
       const select = this.$("speaker");
       const previous = select.value || readSpeakerPreference();
@@ -704,7 +710,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
             "Vào Settings → System → Network → Home Assistant URL → Internet, nhập tên miền HTTPS và lưu. Không cần cấu hình URL trong P2Talk.");
         } else this._status(available ? (
           insecure ? (this._micHttpsUrl
-            ? "Nhấn micro để mở P2Talk bằng HTTPS đã cấu hình trong Home Assistant."
+            ? "Không mở được HTTPS tự động. Hãy chọn nút Mở P2Talk qua HTTPS trong chẩn đoán."
             : "Home Assistant chưa cấu hình địa chỉ HTTPS. Vào Settings → System → Network → Home Assistant URL → Internet để thêm tên miền HTTPS.")
             : "Sẵn sàng. Nhấn giữ micro để nói."
         ) : (speakers.length ? "Các loa đã thêm đều offline/không hỗ trợ phát. Kiểm tra Google Cast." :
@@ -751,14 +757,24 @@ class P2TalkGoogleCastPanel extends HTMLElement {
   }
 
   _openSecurePanel() {
-    // Browsers will not grant microphone privileges to an insecure page.
-    // Navigate the entire HA frontend (never embed a cross-origin iframe).
+    // Switching an existing HTTP document to HTTPS requires a top-level
+    // navigation. Never attempt an insecure iframe or an HTTPS audio-only API.
+    if (window.isSecureContext || this._redirecting) return false;
     const target = safeHttpsPanelUrl(this._micHttpsUrl);
     if (!target) return false;
-    this._status("Đang mở Home Assistant qua HTTPS để cấp quyền micro...", "loading",
-      "Bạn có thể cần đăng nhập lại trên tên miền HTTPS. Nhấn giữ micro sau khi trang tải xong.");
-    window.location.assign(target);
-    return true;
+    this._redirecting = true;
+    this._status("Đang mở P2Talk bằng HTTPS Home Assistant...", "loading",
+      "Tự động chuyển sang kết nối bảo mật trước khi ghi âm. Không cần nhấn micro.");
+    try {
+      // Replace the HTTP history entry so Back does not bounce through P2Talk.
+      window.location.replace(target);
+      return true;
+    } catch (_) {
+      this._redirecting = false;
+      this._status("Không thể mở P2Talk qua HTTPS tự động.", "error",
+        "Kiểm tra URL tại Settings → System → Network và truy cập Home Assistant bằng tên miền HTTPS.");
+      return false;
+    }
   }
 
   async _showMicrophoneFailure(error) {

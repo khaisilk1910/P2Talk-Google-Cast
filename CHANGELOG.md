@@ -1,3 +1,9 @@
+## Unreleased — Automatic HTTPS on panel open
+
+- Khi P2Talk được mở trong phiên Home Assistant HTTP, tự động chuyển sang HTTPS External/Internal URL do Home Assistant quản lý **trước khi nhấn micro**, không cần nhấn lần đầu hoặc thao tác refresh thủ công.
+- Giữ nguyên trang trên HTTPS nếu đã có secure context, chống chuyển hướng lặp, xử lý lỗi điều hướng và không thêm lượt gọi WebSocket.
+- Chỉ kiểm tra khi panel P2Talk được mở, không thêm tác vụ trong HA startup hay dashboard khác. HTTP → HTTPS vẫn cần một lần điều hướng theo chính sách trình duyệt.
+
 ## Unreleased — Native Home Assistant HTTPS URL
 
 - Bỏ trường HTTPS microphone khỏi Options Flow, tự loại bỏ giá trị `mic_https_url` cũ nếu nâng cấp.

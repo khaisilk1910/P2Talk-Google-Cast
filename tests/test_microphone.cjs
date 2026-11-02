@@ -24,11 +24,13 @@ assert.equal(run('safeHttpsPanelUrl("http://ha.example.com/p2talk_google_cast")'
 assert.equal(run('safeHttpsPanelUrl("https://evil.test/not-p2talk")'), null);
 assert.equal(run('safeHttpsPanelUrl("https://ha.example.com@evil.test/p2talk_google_cast")'), null);
 const visited = [];
-context.window.location.assign = (destination) => visited.push(destination);
+context.window.location.replace = (destination) => visited.push(destination);
 const securePanel = run('P2TalkGoogleCastPanel.prototype._openSecurePanel');
-const instance = {_micHttpsUrl: 'https://ha.example.com/p2talk_google_cast', _status() {}};
+const instance = {_micHttpsUrl: 'https://ha.example.com/p2talk_google_cast', _redirecting: false, _status() {}};
 assert.equal(securePanel.call(instance), true);
 assert.equal(visited[0], 'https://ha.example.com/p2talk_google_cast');
+assert.equal(instance._redirecting, true);
+instance._redirecting = false;
 instance._micHttpsUrl = 'http://ha.example.com/p2talk_google_cast';
 assert.equal(securePanel.call(instance), false);
 assert.equal(visited.length, 1);

@@ -60,6 +60,18 @@ class FrontendAssetsTests(unittest.TestCase):
         self.assertIn(':host([data-dark="true"])', source)
         self.assertIn('waveMarkup()', source)
 
+    def test_early_https_redirect_lives_only_in_lazy_panel(self):
+        source = (COMPONENT / 'frontend' / 'panel.js').read_text()
+        start = source.index('async _loadSpeakers(')
+        end = source.index('  _applySpeakerVolume()', start)
+        panel_load = source[start:end]
+        self.assertIn('this._openSecurePanel()', panel_load)
+        self.assertIn('window.isSecureContext', panel_load)
+        self.assertEqual(panel_load.count('this._hass.callWS'), 1)
+        self.assertIn('window.location.replace(target)', source)
+        setup = (COMPONENT / '__init__.py').read_text()
+        self.assertNotIn('configured_https_panel', setup)
+
     def test_panel_asset_cache_is_busted_on_update(self):
         source = (COMPONENT / '__init__.py').read_text()
         self.assertIn('stat().st_mtime_ns', source)
