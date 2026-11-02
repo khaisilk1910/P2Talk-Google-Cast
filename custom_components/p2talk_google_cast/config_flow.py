@@ -15,6 +15,7 @@ from .const import (
     CONF_DEFAULT_VOLUME,
     CONF_FFMPEG_PATH,
     CONF_MAX_RECORD_SECONDS,
+    CONF_MIC_HTTPS_URL,
     CONF_RETENTION_HOURS,
     CONF_SPEAKERS,
     DEFAULTS,
@@ -22,6 +23,7 @@ from .const import (
     NAME,
 )
 from .speakers import configured_speakers, remove_speaker, speaker_by_id, upsert_speaker
+from .secure_url import optional_secure_origin
 
 
 def _speaker_selector(multiple: bool = False) -> selector.EntitySelector:
@@ -41,6 +43,7 @@ def options_schema(options: Mapping[str, Any]) -> vol.Schema:
         vol.Required(CONF_RETENTION_HOURS, default=value(CONF_RETENTION_HOURS)): vol.All(vol.Coerce(int), vol.Range(min=1, max=48)),
         vol.Required(CONF_DEFAULT_VOLUME, default=value(CONF_DEFAULT_VOLUME)): vol.All(vol.Coerce(float), vol.Range(min=0.05, max=1.0)),
         vol.Required(CONF_FFMPEG_PATH, default=value(CONF_FFMPEG_PATH)): vol.All(str, vol.Length(min=1, max=256)),
+        vol.Optional(CONF_MIC_HTTPS_URL, default=value(CONF_MIC_HTTPS_URL)): optional_secure_origin,
     })
 
 

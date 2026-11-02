@@ -55,6 +55,16 @@ function microphoneEnvironment() {
   };
 }
 
+function safeHttpsPanelUrl(candidate) {
+  if (typeof candidate !== "string") return null;
+  try {
+    const target = new URL(candidate);
+    if (target.protocol !== "https:" || target.username || target.password ||
+        target.search || target.hash || target.pathname !== `/${DOMAIN}`) return null;
+    return target.href;
+  } catch (_) { return null; }
+}
+
 function microphoneAdvice(error, environment = microphoneEnvironment()) {
   const name = error?.name || "";
   if (!environment.getUserMedia && !environment.secure) {
@@ -494,6 +504,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._maxSeconds = 120;
     this._maxBytes = 8 * 1024 * 1024;
     this._configuredSpeakers = [];
+    this._micHttpsUrl = null;
     this._timer = null;
     this._started = 0;
   }
@@ -531,7 +542,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
           <div class="volume-box">${icon("volume")}<input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng phát" style="--progress:65%"/>${icon("volume", "volume-max")}<output id="volumeText" for="volume">65%</output></div>
         </section>
         <section class="stage" id="stage" aria-label="Nhấn giữ để nói">
-          <div class="stage-kicker">${icon("wifi")} Kết nối nội bộ qua Home Assistant</div>
+          <div class="stage-kicker">${icon("wifi")} Kết nối qua Home Assistant</div>
           <div class="mic-layout">${waveMarkup()}<div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br/>để nói</span></button></div>${waveMarkup()}</div>
           <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát đến loa đã chọn</div>
         </section>
@@ -539,7 +550,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng loa</button></div>
         <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><div class="status-copy"><strong id="statusText" class="status-content">Đang kết nối Home Assistant...</strong><small id="statusNote">Đang kiểm tra quyền truy cập và thiết bị.</small></div><span class="status-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
         <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro & cách khắc phục</summary>
-          <p id="micAction"></p><pre id="micDetails"></pre>
+          <p id="micAction"></p><button type="button" class="copy-diagnostics" id="micHttps" hidden>Mở P2Talk qua HTTPS</button><pre id="micDetails"></pre>
           <button id="micCopy" type="button" class="copy-diagnostics">Sao chép chẩn đoán</button>
           <p><a href="https://www.home-assistant.io/docs/configuration/remote/" target="_blank" rel="noopener noreferrer">Hướng dẫn HTTPS/Home Assistant</a></p>
           <p>Lỗi ghi âm xảy ra ở thiết bị đang mở giao diện; nó có thể không xuất hiện trong log Home Assistant Core.</p>
@@ -550,6 +561,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       </main></div>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.$("refresh").addEventListener("click", () => this._loadSpeakers());
+    this.$("micHttps").addEventListener("click", () => this._openSecurePanel());
     this.$("micCopy").addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(this.$("micDetails").textContent);
@@ -657,6 +669,8 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._loaded = true;
       this._maxSeconds = response.max_seconds || 120;
       this._maxBytes = response.max_bytes || this._maxBytes;
+      this._micHttpsUrl = safeHttpsPanelUrl(response.mic_https_url);
+      this.$("micHttps").hidden = !this._micHttpsUrl;
       const select = this.$("speaker");
       const previous = select.value || readSpeakerPreference();
       select.replaceChildren();
@@ -682,10 +696,15 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._syncSpeakerState();
       if (!this._recording && !this._sending) {
         const available = speakers.some((s) => s.is_available);
-        this._status(available ? "Sẵn sàng. Nhấn giữ micro để nói." :
-          (speakers.length ? "Các loa đã thêm đều offline/không hỗ trợ phát. Kiểm tra Google Cast." :
+        const insecure = !window.isSecureContext;
+        this._status(available ? (
+          insecure ? (this._micHttpsUrl
+            ? "Nhấn micro để mở P2Talk qua HTTPS trước khi ghi âm."
+            : "Cần mở Home Assistant qua HTTPS để dùng microphone.")
+            : "Sẵn sàng. Nhấn giữ micro để nói."
+        ) : (speakers.length ? "Các loa đã thêm đều offline/không hỗ trợ phát. Kiểm tra Google Cast." :
           "Chưa có loa. Vào Settings → Devices & services → P2Talk Google Cast → Configure → Add speaker."),
-          available ? "success" : "error");
+          available && !insecure ? "success" : available && insecure ? "" : "error");
       }
     } catch (error) {
       if (!silent) this._status(`Không đọc được danh sách loa: ${error.message || error}`, "error");
@@ -723,13 +742,27 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._refreshControls();
   }
 
+  _openSecurePanel() {
+    // Browsers will not grant microphone privileges to an insecure page.
+    // Navigate the entire HA frontend (never embed a cross-origin iframe).
+    const target = safeHttpsPanelUrl(this._micHttpsUrl);
+    if (!target) return false;
+    this._status("Đang mở Home Assistant qua HTTPS để cấp quyền micro...", "loading",
+      "Bạn có thể cần đăng nhập lại trên tên miền HTTPS. Nhấn giữ micro sau khi trang tải xong.");
+    window.location.assign(target);
+    return true;
+  }
+
   async _showMicrophoneFailure(error) {
     const environment = microphoneEnvironment();
     const advice = microphoneAdvice(error, environment);
     const help = this.$("micHelp");
     help.hidden = false;
     help.open = true;
-    this.$("micAction").textContent = advice.action;
+    this.$("micAction").textContent = advice.code === "insecure_context" && this._micHttpsUrl
+      ? "Nhấn nút bên dưới để mở P2Talk bằng HTTPS của Home Assistant. Cần cấp quyền micro sau khi mở trang HTTPS."
+      : advice.action;
+    this.$("micHttps").hidden = !(advice.code === "insecure_context" && this._micHttpsUrl);
     this.$("micCopy").textContent = "Sao chép chẩn đoán";
     let permission = "not available";
     try {
@@ -761,6 +794,12 @@ class P2TalkGoogleCastPanel extends HTMLElement {
 
   async _startRecording() {
     if (this._recording || this._sending || !this.$("speaker").value || this._pressed) return;
+    // An HTTP IP page cannot obtain microphone permission by sending data to
+    // HTTPS; instead reload the panel itself at the trusted HTTPS origin.
+    if (!window.isSecureContext) {
+      if (!this._openSecurePanel()) await this._showMicrophoneFailure(new Error("insecure_context"));
+      return;
+    }
     this._pressed = true;
     this._discard = false;
     try {

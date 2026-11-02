@@ -10,7 +10,7 @@ const context = {
   window: { isSecureContext: false, MediaRecorder: undefined, location: { protocol: 'http:' } },
   HTMLElement: class {},
   customElements: { get: () => undefined, define: () => {} },
-  console,
+  console, URL,
 };
 context.window.self = context.window;
 context.window.top = context.window;
@@ -19,6 +19,19 @@ vm.runInContext(source, context);
 const run = js => vm.runInContext(js, context);
 
 assert.equal(run('microphoneAdvice(null).code'), 'insecure_context');
+assert.equal(run('safeHttpsPanelUrl("https://ha.example.com/p2talk_google_cast")'), 'https://ha.example.com/p2talk_google_cast');
+assert.equal(run('safeHttpsPanelUrl("http://ha.example.com/p2talk_google_cast")'), null);
+assert.equal(run('safeHttpsPanelUrl("https://evil.test/not-p2talk")'), null);
+assert.equal(run('safeHttpsPanelUrl("https://ha.example.com@evil.test/p2talk_google_cast")'), null);
+const visited = [];
+context.window.location.assign = (destination) => visited.push(destination);
+const securePanel = run('P2TalkGoogleCastPanel.prototype._openSecurePanel');
+const instance = {_micHttpsUrl: 'https://ha.example.com/p2talk_google_cast', _status() {}};
+assert.equal(securePanel.call(instance), true);
+assert.equal(visited[0], 'https://ha.example.com/p2talk_google_cast');
+instance._micHttpsUrl = 'http://ha.example.com/p2talk_google_cast';
+assert.equal(securePanel.call(instance), false);
+assert.equal(visited.length, 1);
 assert.match(run('microphoneAdvice(null).action'), /HTTPS/);
 assert.equal(run('microphoneEnvironment().protocol'), 'HTTP');
 assert.equal(run('microphoneEnvironment().secure'), false);
@@ -39,4 +52,4 @@ assert.equal(run('microphoneAdvice({name: "SecurityError"}).code'), 'capture_blo
 assert.equal(run('microphoneAdvice({name: "OverconstrainedError"}).code'), 'unsupported_constraints');
 assert.equal(run('microphoneAdvice({name: "AbortError"}).code'), 'capture_failed');
 
-console.log('PASS: 13 microphone capability/error checks');
+console.log('PASS: microphone capability/error and HTTPS route checks');

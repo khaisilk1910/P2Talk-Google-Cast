@@ -1,3 +1,9 @@
+## Unreleased — HTTPS microphone entry routing
+
+- When opened on an insecure HTTP LAN origin, microphone press now offers/navigates to the configured Home Assistant HTTPS panel instead of attempting a blocked microphone request.
+- Added optional HTTPS origin in the standard Options Flow, with fallback to Home Assistant internal/external HTTPS URLs and validation against unsafe/non-HTTPS redirects.
+- Kept recordings, uploads, and playback in the existing authenticated Home Assistant panel; no new audio server or background task.
+
 ## Chưa phát hành — Microphone diagnostics
 
 - Phân biệt HTTPS không an toàn, WebView thiếu API, MediaRecorder không hỗ trợ, lỗi quyền microphone và micro đang bận/không có.

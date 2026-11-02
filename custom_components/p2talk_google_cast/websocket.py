@@ -32,6 +32,7 @@ from .const import (
     UPLOAD_TTL_SECONDS,
 )
 from .speakers import configured_speakers, speaker_by_id
+from .secure_url import microphone_https_panel_url
 
 _LOGGER = logging.getLogger(__name__)
 _REGISTERED_KEY = f"{DOMAIN}_ws_registered"
@@ -130,6 +131,7 @@ def ws_speakers(hass: HomeAssistant, connection, msg) -> None:
         "max_seconds": runtime.entry.options.get(CONF_MAX_RECORD_SECONDS, DEFAULTS[CONF_MAX_RECORD_SECONDS]),
         "default_volume": runtime.entry.options.get(CONF_DEFAULT_VOLUME, DEFAULTS[CONF_DEFAULT_VOLUME]),
         "max_bytes": MAX_AUDIO_BYTES,
+        "mic_https_url": microphone_https_panel_url(hass, runtime.entry.options),
     })
 
 

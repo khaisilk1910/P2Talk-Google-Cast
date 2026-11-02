@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_FFMPEG_PATH, CONF_SPEAKERS, DOMAIN
+from .const import CONF_FFMPEG_PATH, CONF_MIC_HTTPS_URL, CONF_SPEAKERS, DOMAIN
 from .speakers import configured_speakers
 
 
@@ -23,7 +23,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry) -> dict
     return {
         "configured_speaker_count": len(speakers),
         "speakers": speakers,
-        "options": {k: ("[redacted]" if k == CONF_FFMPEG_PATH else v)
+        "options": {k: ("[redacted]" if k in (CONF_FFMPEG_PATH, CONF_MIC_HTTPS_URL) else v)
                     for k, v in entry.options.items() if k != CONF_SPEAKERS},
         "active_uploads": len(runtime.uploads) if runtime else 0,
         "active_conversions": len(runtime.processing_users) if runtime else 0,
