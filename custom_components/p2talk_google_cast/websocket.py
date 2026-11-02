@@ -86,9 +86,9 @@ def _can_control(connection, entity_id: str) -> bool:
     return connection.user.is_admin or connection.user.permissions.check_entity(entity_id, POLICY_CONTROL)
 
 
-def _selected_speaker(hass, runtime, connection, msg):
-    """Enforce allowlist on BOTH stop and finish, never trust the dropdown."""
-    entity = msg["speaker"]
+def _selected_speaker(hass, runtime, connection, msg, entity=None):
+    """Check configured allowlist, user control permission and availability."""
+    entity = entity if entity is not None else msg["speaker"]
     item = speaker_by_id(runtime.entry.options, entity)
     if item is None:
         connection.send_error(msg["id"], "not_configured", "Loa chưa được thêm vào cấu hình P2Talk.")
@@ -101,6 +101,35 @@ def _selected_speaker(hass, runtime, connection, msg):
         connection.send_error(msg["id"], "speaker_offline", "Loa offline hoặc chưa được Google Cast phát hiện.")
         return None
     return state
+
+
+def _requested_speakers(connection, msg) -> list[str] | None:
+    """Accept old single-speaker calls and new bounded multi-speaker calls."""
+    entities = msg.get("speakers")
+    if entities is None:
+        entity = msg.get("speaker")
+        entities = [entity] if entity else []
+    if not entities or len(entities) > 32 or len(set(entities)) != len(entities):
+        connection.send_error(msg["id"], "invalid_speakers", "Chọn từ 1 đến 32 loa, không trùng lặp.")
+        return None
+    return entities
+
+
+def _validate_speakers(hass, runtime, connection, msg, *, require_play: bool):
+    """Reject the entire request before playback unless EVERY target is allowed."""
+    entities = _requested_speakers(connection, msg)
+    if entities is None:
+        return None
+    states = {}
+    for entity in entities:
+        state = _selected_speaker(hass, runtime, connection, msg, entity)
+        if state is None:
+            return None
+        if require_play and not (int(state.attributes.get("supported_features") or 0) & MediaPlayerEntityFeature.PLAY_MEDIA):
+            connection.send_error(msg["id"], "unsupported", f"Loa {entity} không hỗ trợ play_media.")
+            return None
+        states[entity] = state
+    return states
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/speakers"})
@@ -117,7 +146,7 @@ def ws_speakers(hass: HomeAssistant, connection, msg) -> None:
             continue
         state = hass.states.get(entity_id)
         features = int(state.attributes.get("supported_features") or 0) if state else 0
-        available = bool(state and state.state not in ("unknown", "unavailable"))
+        available = bool(state and state.state not in ("unknown", "unavailable") and _can_control(connection, entity_id))
         speakers.append({
             "entity_id": entity_id,
             "friendly_name": item["name"] or (state.name if state else entity_id),
@@ -228,7 +257,8 @@ def ws_upload_cancel(hass: HomeAssistant, connection, msg) -> None:
 @websocket_api.websocket_command({
     vol.Required("type"): f"{DOMAIN}/upload_finish",
     vol.Required("upload_id"): str,
-    vol.Required("speaker"): str,
+    vol.Optional("speaker"): str,  # Backward-compatible older panels
+    vol.Optional("speakers"): vol.All([str], vol.Length(min=1, max=32)),
     vol.Required("volume"): vol.All(vol.Coerce(float), vol.Range(min=0.05, max=1.0)),
 })
 @websocket_api.async_response
@@ -242,15 +272,9 @@ async def ws_upload_finish(hass: HomeAssistant, connection, msg) -> None:
     upload.cancel_expiry()
     runtime.uploads.pop(msg["upload_id"], None)
     tag = msg["upload_id"][:8]
-    entity_id = msg["speaker"]
-    state = _selected_speaker(hass, runtime, connection, msg)
-    if state is None:
+    states = _validate_speakers(hass, runtime, connection, msg, require_play=True)
+    if states is None:
         upload.content.clear()
-        return
-    features = int(state.attributes.get("supported_features") or 0)
-    if not features & MediaPlayerEntityFeature.PLAY_MEDIA:
-        upload.content.clear()
-        connection.send_error(msg["id"], "unsupported", "Loa không hỗ trợ play_media.")
         return
     if connection.user.id in runtime.processing_users or len(runtime.processing_users) >= 2:
         upload.content.clear()
@@ -263,39 +287,68 @@ async def ws_upload_finish(hass: HomeAssistant, connection, msg) -> None:
     started = monotonic()
     transfer_ms = round((started - upload.started) * 1000)
     size = len(upload.content)
+    entities = list(states)
     try:
         async with runtime.convert_semaphore:
             media_id = await async_convert(hass, bytes(upload.content), runtime.entry.options, upload.mime_type)
         convert_ms = round((monotonic() - started) * 1000)
         upload.content.clear()
-        if not runtime.active or speaker_by_id(runtime.entry.options, entity_id) is None:
-            connection.send_error(msg["id"], "not_loaded", "Integration unloaded or speaker removed")
+        if not runtime.active:
+            connection.send_error(msg["id"], "not_loaded", "Integration unloaded")
             return
         context = connection.context(msg)
-        current_volume = state.attributes.get("volume_level")
-        if (features & MediaPlayerEntityFeature.VOLUME_SET and (
-            not isinstance(current_volume, (int, float)) or abs(current_volume - msg["volume"]) > 0.02
-        )):
-            await hass.services.async_call("media_player", "volume_set", {
-                "entity_id": entity_id, "volume_level": msg["volume"],
-            }, blocking=True, context=context)
-        await hass.services.async_call("media_player", "play_media", {
-            "entity_id": entity_id,
-            "media_content_id": media_id,
-            "media_content_type": "music",
-        }, blocking=True, context=context)
+
+        async def send_to_speaker(entity_id: str) -> tuple[str, bool]:
+            # Recheck after conversion: entities, permissions and state may change.
+            if speaker_by_id(runtime.entry.options, entity_id) is None or not _can_control(connection, entity_id):
+                return entity_id, False
+            state = hass.states.get(entity_id)
+            if state is None or state.state in ("unknown", "unavailable"):
+                return entity_id, False
+            features = int(state.attributes.get("supported_features") or 0)
+            if not features & MediaPlayerEntityFeature.PLAY_MEDIA:
+                return entity_id, False
+            try:
+                current_volume = state.attributes.get("volume_level")
+                if features & MediaPlayerEntityFeature.VOLUME_SET and (
+                    not isinstance(current_volume, (int, float)) or abs(current_volume - msg["volume"]) > 0.02
+                ):
+                    await hass.services.async_call("media_player", "volume_set", {
+                        "entity_id": entity_id, "volume_level": msg["volume"],
+                    }, blocking=True, context=context)
+                await hass.services.async_call("media_player", "play_media", {
+                    "entity_id": entity_id,
+                    "media_content_id": media_id,
+                    "media_content_type": "music",
+                }, blocking=True, context=context)
+                return entity_id, True
+            except Exception:
+                _LOGGER.exception("P2Talk [%s] playback failed, target=%s", tag, entity_id)
+                return entity_id, False
+
+        # Issue playback requests concurrently so speakers start as close together
+        # as their Google Cast / Home Assistant latencies allow. No sync guarantee.
+        results = await asyncio.gather(*(send_to_speaker(entity) for entity in entities))
+        succeeded = [entity for entity, ok in results if ok]
+        failed = [entity for entity, ok in results if not ok]
         play_ms = round((monotonic() - started) * 1000) - convert_ms
         total_ms = round((monotonic() - started) * 1000)
         metrics = {"transfer_ms": transfer_ms, "convert_ms": convert_ms, "service_ms": play_ms, "processing_ms": total_ms}
-        _LOGGER.info("P2Talk [%s] sent to %s (%d bytes, upload=%dms, ffmpeg=%dms, HA_services=%dms)",
-                     tag, entity_id, size, transfer_ms, convert_ms, play_ms)
-        connection.send_result(msg["id"], {"speaker": entity_id, "performance": metrics})
+        _LOGGER.info("P2Talk [%s] sent to %d/%d speakers (%d bytes, upload=%dms, ffmpeg=%dms, HA_services=%dms)",
+                     tag, len(succeeded), len(entities), size, transfer_ms, convert_ms, play_ms)
+        if not succeeded:
+            connection.send_error(msg["id"], "playback_failed", "Không phát được trên loa đã chọn. Kiểm tra trạng thái loa và log Home Assistant.")
+        else:
+            connection.send_result(msg["id"], {
+                "speaker": succeeded[0],  # Retained for older clients
+                "speakers": succeeded, "failed_speakers": failed, "performance": metrics,
+            })
     except AudioError as err:
-        _LOGGER.warning("P2Talk [%s] conversion failed, target=%s: %s", tag, entity_id, err)
+        _LOGGER.warning("P2Talk [%s] conversion failed: %s", tag, err)
         connection.send_error(msg["id"], "audio_error", str(err))
     except Exception:
-        _LOGGER.exception("P2Talk [%s] playback failed, target=%s", tag, entity_id)
-        connection.send_error(msg["id"], "playback_failed", "Không phát được trên loa. Kiểm tra log và URL nội bộ của Home Assistant.")
+        _LOGGER.exception("P2Talk [%s] playback request failed", tag)
+        connection.send_error(msg["id"], "playback_failed", "Không thể xử lý bản ghi âm. Kiểm tra log Home Assistant.")
     finally:
         runtime.processing_users.discard(connection.user.id)
         upload.content.clear()
@@ -303,21 +356,39 @@ async def ws_upload_finish(hass: HomeAssistant, connection, msg) -> None:
 
 @websocket_api.websocket_command({
     vol.Required("type"): f"{DOMAIN}/stop",
-    vol.Required("speaker"): str,
+    vol.Optional("speaker"): str,
+    vol.Optional("speakers"): vol.All([str], vol.Length(min=1, max=32)),
 })
 @websocket_api.async_response
 async def ws_stop(hass: HomeAssistant, connection, msg) -> None:
     runtime = _runtime(hass, connection, msg)
-    if runtime is None or _selected_speaker(hass, runtime, connection, msg) is None:
+    if runtime is None:
         return
-    try:
-        await hass.services.async_call("media_player", "media_stop", {"entity_id": msg["speaker"]},
-                                       blocking=True, context=connection.context(msg))
-        connection.send_result(msg["id"])
-        _LOGGER.debug("P2Talk playback stopped: %s", msg["speaker"])
-    except Exception:
-        _LOGGER.exception("P2Talk stop failed: %s", msg["speaker"])
-        connection.send_error(msg["id"], "stop_failed", "Không dừng được loa")
+    states = _validate_speakers(hass, runtime, connection, msg, require_play=False)
+    if states is None:
+        return
+    context = connection.context(msg)
+
+    async def stop_one(entity_id: str) -> tuple[str, bool]:
+        if not runtime.active or speaker_by_id(runtime.entry.options, entity_id) is None or not _can_control(connection, entity_id):
+            return entity_id, False
+        try:
+            await hass.services.async_call("media_player", "media_stop", {
+                "entity_id": entity_id,
+            }, blocking=True, context=context)
+            return entity_id, True
+        except Exception:
+            _LOGGER.exception("P2Talk stop failed: %s", entity_id)
+            return entity_id, False
+
+    results = await asyncio.gather(*(stop_one(entity) for entity in states))
+    succeeded = [entity for entity, ok in results if ok]
+    failed = [entity for entity, ok in results if not ok]
+    if not succeeded:
+        connection.send_error(msg["id"], "stop_failed", "Không dừng được các loa đã chọn.")
+    else:
+        connection.send_result(msg["id"], {"speakers": succeeded, "failed_speakers": failed})
+        _LOGGER.debug("P2Talk playback stopped: %s", succeeded)
 
 
 def register_commands(hass: HomeAssistant) -> None:

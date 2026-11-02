@@ -1,7 +1,7 @@
 {
   "domain": "p2talk_google_cast",
   "name": "P2Talk Google Cast",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "documentation": "https://github.com/khaisilk1910/P2Talk-Google-Cast#readme",
   "issue_tracker": "https://github.com/khaisilk1910/P2Talk-Google-Cast/issues",
   "codeowners": [
