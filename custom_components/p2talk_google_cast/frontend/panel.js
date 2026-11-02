@@ -7,14 +7,23 @@
 const DOMAIN = "p2talk_google_cast";
 const CHUNK_BYTES = 48 * 1024;
 const UPLOAD_WINDOW = 6; // amortize Wi-Fi/WebSocket RTT while keeping ordering
+const MAX_TARGET_SPEAKERS = 32;
 const STORAGE_PREFIX = "p2talk_google_cast_";
-function readSpeakerPreference() {
-  try { return localStorage.getItem(`${STORAGE_PREFIX}speaker`); }
-  catch (_) { return null; } // Private browsing / embedded WebViews may block storage.
+function readSpeakerPreferences() {
+  try {
+    const value = localStorage.getItem(`${STORAGE_PREFIX}speakers`);
+    if (value !== null) {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
+    }
+    // Upgrade a stored single-speaker selection from earlier versions.
+    const old = localStorage.getItem(`${STORAGE_PREFIX}speaker`);
+    return old ? [old] : [];
+  } catch (_) { return []; } // Embedded WebViews may block storage.
 }
-function saveSpeakerPreference(value) {
-  try { localStorage.setItem(`${STORAGE_PREFIX}speaker`, value); }
-  catch (_) { /* Device selection still works without persistence. */ }
+function saveSpeakerPreferences(ids) {
+  try { localStorage.setItem(`${STORAGE_PREFIX}speakers`, JSON.stringify(ids)); }
+  catch (_) { /* Selection still works without persistence. */ }
 }
 
 // Inline, dependency-free SVG icons. No external fonts, icon CDN or runtime package.
@@ -725,6 +734,31 @@ h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; mar
 /* No idle animation. Recording and sending effects remain state-driven. */
 @media (prefers-reduced-motion:reduce) { .action,.select-wrap,.volume-box,.mic { transition:none!important; } }
 
+
+/* Checkable multi-speaker picker; remains usable on mobile and with keyboard. */
+.speaker-picker { display:block; overflow:visible; }
+.speaker-picker > summary { display:flex; align-items:center; min-height:58px; cursor:pointer; list-style:none; gap:5px; }
+.speaker-picker > summary::-webkit-details-marker { display:none; }
+.speaker-picker > summary:focus-visible { outline:2px solid var(--pt-primary); outline-offset:3px; border-radius:14px; }
+.speaker-picker > summary[aria-disabled="true"] { cursor:default; opacity:.65; }
+.speaker-summary-text { min-width:0; flex:1; padding:8px 113px 8px 3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:800; color:var(--pt-ink); }
+.speaker-picker[open] .select-chevron { transform:rotate(180deg); }
+.speaker-picker-body { padding:9px; border-top:1px solid var(--pt-border); }
+.speaker-picker-tools { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:0 0 8px; }
+.speaker-picker-tools button { border:1px solid var(--pt-border); border-radius:8px; background:var(--pt-tint); color:var(--pt-primary); cursor:pointer; padding:7px 10px; font-size:12px; font-weight:750; }
+.speaker-picker-tools button:last-child { margin-inline-start:auto; color:var(--pt-ink); }
+.speaker-picker-tools button:disabled { opacity:.5; cursor:default; }
+.speaker-options { display:grid; gap:5px; max-height:260px; overflow-y:auto; }
+.speaker-option { display:flex; align-items:center; gap:10px; min-height:45px; padding:8px 10px; border-radius:10px; background:var(--pt-tint); border:1px solid transparent; color:var(--pt-ink); cursor:pointer; }
+.speaker-option:has(input:checked) { border-color:color-mix(in srgb,var(--pt-primary) 55%,var(--pt-border)); background:color-mix(in srgb,var(--pt-primary) 10%,var(--pt-card)); }
+.speaker-option:has(input:disabled) { opacity:.55; cursor:not-allowed; }
+.speaker-option input { width:18px; height:18px; flex:none; accent-color:var(--pt-primary); }
+.speaker-option-name { flex:1; min-width:0; font-size:13px; font-weight:720; overflow-wrap:anywhere; }
+.speaker-option small { font-size:10px; color:var(--pt-muted); }
+.speaker-picker-empty { margin:12px 5px; font-size:12px; color:var(--pt-muted); }
+@media (max-width:430px) { .speaker-summary-text { font-size:12px; padding-right:93px; } .speaker-option small { font-size:9px; max-width:92px; text-align:right; } }
+@media (max-width:350px) { .speaker-summary-text { padding-right:24px; } }
+
 `;
 
 const waveMarkup = () => `<div class="wave" aria-hidden="true">${[14,27,44,67,35,57,84,48,62,37,75,102,65,46,58,31,18].map((n,i)=>`<span style="--h:${n}px;--delay:${(i*.07).toFixed(2)}s"></span>`).join("")}</div>`;
@@ -747,6 +781,9 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._maxSeconds = 120;
     this._maxBytes = 8 * 1024 * 1024;
     this._configuredSpeakers = [];
+    this._selectedSpeakerIds = new Set();
+    this._selectionInitialized = false;
+    this._recordingSpeakerIds = null;
     this._haHttpsConfigured = false;
     this._micHttpsState = "unknown";
     this._timer = null;
@@ -803,12 +840,15 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         </header>
         <div class="panel-body">
         <section class="section speaker-section" aria-label="Thiết bị phát">
-          <div class="section-top"><label class="section-title" for="speaker">${icon("volume")} Chọn loa Google Cast</label>
+          <div class="section-top"><span class="section-title">${icon("volume")} Chọn loa Google Cast</span>
           <span class="section-tools"><button type="button" class="refresh-icon" id="refresh" title="Làm mới danh sách loa" aria-label="Làm mới danh sách loa">${icon("refresh")}</button><a class="small-link configure-link" id="configure" href="/config/integrations/integration/p2talk_google_cast" title="Cấu hình, thêm, sửa hoặc xóa loa">${icon("settings")} Quản lý loa</a></span></div>
-          <div class="select-wrap"><span class="device-icon" aria-hidden="true"><span class="nest-mini"></span></span><select id="speaker" aria-label="Chọn loa đã thêm trong cấu hình"><option value="">Đang tải loa...</option></select><span class="speaker-availability" id="inlineState" aria-hidden="true"><i class="state-dot"></i><span id="inlineStateText">Đang tải</span></span>${icon("chevron","select-chevron")}</div>
+          <details class="select-wrap speaker-picker" id="speaker">
+            <summary id="speakerSummary" aria-label="Chọn một hoặc nhiều loa Google Cast"><span class="device-icon" aria-hidden="true"><span class="nest-mini"></span></span><span class="speaker-summary-text" id="speakerSummaryText">Đang tải loa...</span><span class="speaker-availability" id="inlineState" aria-hidden="true"><i class="state-dot"></i><span id="inlineStateText">Đang tải</span></span>${icon("chevron","select-chevron")}</summary>
+            <div class="speaker-picker-body"><div class="speaker-picker-tools"><button type="button" id="selectAll">Chọn tất cả</button><button type="button" id="selectNone">Bỏ chọn</button><button type="button" id="speakerDone">Xong</button></div><div class="speaker-options" id="speakerOptions" role="group" aria-label="Danh sách loa đã cấu hình"></div></div>
+          </details>
           <div class="speaker-meta" id="speakerMeta"><span class="state-dot"></span><span id="speakerState">Đang kiểm tra thiết bị...</span></div>
         </section>
-        <section class="section volume-section" aria-label="Âm lượng phát"><div class="section-top"><label for="volume" class="section-title">${icon("volume")} Âm lượng phát</label></div>
+        <section class="section volume-section" aria-label="Âm lượng phát"><div class="section-top"><label for="volume" class="section-title">${icon("volume")} Âm lượng chung cho loa đã chọn</label></div>
           <div class="volume-box">${icon("volume")}<input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng phát" style="--progress:65%"/>${icon("volume", "volume-max")}<output id="volumeText" for="volume">65%</output></div>
         </section>
         <section class="stage" id="stage" aria-label="Nhấn giữ để nói">
@@ -817,7 +857,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
           <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát đến loa đã chọn</div>
         </section>
         <div class="actions"><button type="button" class="action cancel-action" id="cancel" disabled>${icon("close")} Hủy</button>
-        <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng loa</button></div>
+        <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng các loa</button></div>
         <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><div class="status-copy"><strong id="statusText" class="status-content">Đang kết nối Home Assistant...</strong><small id="statusNote">Đang kiểm tra quyền truy cập và thiết bị.</small></div><span class="status-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
         <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro & cách khắc phục</summary>
           <p id="micAction"></p><pre id="micDetails"></pre>
@@ -841,12 +881,14 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         this.$("micCopy").textContent = "Hãy chọn và sao chép phần chẩn đoán";
       }
     });
-    this.$("speaker").addEventListener("change", (e) => {
-      saveSpeakerPreference(e.target.value);
-      this._applySpeakerVolume();
-      this._syncSpeakerState();
-      this._refreshControls();
+    this.$("speaker").addEventListener("click", (event) => {
+      if ((this._recording || this._sending) && event.target.closest("summary")) event.preventDefault();
     });
+    this.$("selectAll").addEventListener("click", () => {
+      this._setSelectedSpeakers(this._configuredSpeakers.filter((s) => this._speakerAvailable(s)).map((s) => s.entity_id));
+    });
+    this.$("selectNone").addEventListener("click", () => this._setSelectedSpeakers([]));
+    this.$("speakerDone").addEventListener("click", () => { this.$("speaker").open = false; });
     this.$("volume").addEventListener("input", (e) => {
       this.$("volumeText").textContent = `${e.target.value}%`;
       this.$("volume").style.setProperty("--progress", `${e.target.value}%`);
@@ -915,20 +957,36 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     el.className = `status ${type}`;
   }
 
+  _speakerAvailable(speaker) {
+    if (!speaker?.is_available) return false;
+    const state = this._hass?.states?.[speaker.entity_id]?.state || speaker.state;
+    return state !== "unavailable" && state !== "unknown";
+  }
+
+  _selectedSpeakers() {
+    return this._configuredSpeakers.filter((speaker) =>
+      this._selectedSpeakerIds.has(speaker.entity_id) && this._speakerAvailable(speaker));
+  }
+
   _refreshControls() {
     if (!this.$) return;
-    const entityId = this.$("speaker").value;
-    const speaker = this._configuredSpeakers.find((entry) => entry.entity_id === entityId);
-    const state = this._hass?.states?.[entityId]?.state || speaker?.state;
-    const selected = !!speaker?.is_available && state !== "unknown" && state !== "unavailable";
+    const selected = this._selectedSpeakers().length > 0;
     this.$("mic").disabled = this._recording || this._sending || !selected;
-    // While recording, keep the same pressed button operable for pointerup.
+    // Keep the pressed button operable for pointerup during recording.
     if (this._recording) this.$("mic").disabled = false;
-    this.$("speaker").disabled = this._recording || this._sending;
-    this.$("stop").disabled = this._sending || !selected;
+    const locked = this._recording || this._sending;
+    if (locked) this.$("speaker").open = false;
+    this.$("speakerSummary").setAttribute("aria-disabled", String(locked));
+    for (const control of this.$("speakerOptions").querySelectorAll("input")) {
+      const speaker = this._configuredSpeakers.find((item) => item.entity_id === control.value);
+      control.disabled = locked || !this._speakerAvailable(speaker);
+    }
+    this.$("selectAll").disabled = locked;
+    this.$("selectNone").disabled = locked;
+    this.$("stop").disabled = this._sending || this._recording || !selected;
     this.$("cancel").disabled = !this._recording;
-    this.$("refresh").disabled = this._recording || this._sending;
-    this.$("configure").style.pointerEvents = this._recording || this._sending ? "none" : "";
+    this.$("refresh").disabled = locked;
+    this.$("configure").style.pointerEvents = locked ? "none" : "";
   }
 
   /**
@@ -999,27 +1057,19 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       if (insecure) this.$("micAction").textContent = this._haHttpsConfigured
         ? "Không thể sử dụng micro qua HTTP. P2Talk chỉ tự chuyển khi Home Assistant có URL HTTPS hợp lệ và trình duyệt cho phép điều hướng an toàn."
         : "Home Assistant chưa có URL HTTPS được khai báo. Vào Settings → System → Network → Home Assistant URL → Internet và lưu tên miền HTTPS hợp lệ.";
-      const select = this.$("speaker");
-      const previous = select.value || readSpeakerPreference();
-      select.replaceChildren();
-      const speakers = response.speakers || [];
+      const speakers = Array.isArray(response.speakers) ? response.speakers : [];
       this._configuredSpeakers = speakers;
-      const empty = document.createElement("option");
-      empty.value = "";
-      empty.textContent = speakers.length ? "Chọn loa đã cấu hình..." : "Chưa thêm loa trong cấu hình tích hợp";
-      select.append(empty);
-      for (const speaker of speakers) {
-        const option = document.createElement("option");
-        option.value = speaker.entity_id;
-        option.textContent = speaker.friendly_name;
-        option.disabled = !speaker.is_available;
-        select.append(option);
+      const previous = this._selectionInitialized
+        ? [...this._selectedSpeakerIds] : readSpeakerPreferences();
+      const availableIds = new Set(speakers.filter((s) => this._speakerAvailable(s)).map((s) => s.entity_id));
+      const selected = previous.filter((id) => availableIds.has(id)).slice(0, MAX_TARGET_SPEAKERS);
+      // Keep an explicit "Bỏ chọn" choice empty on refresh; only default on first visit.
+      if (!this._selectionInitialized && selected.length === 0 && availableIds.size > 0) {
+        selected.push(availableIds.values().next().value);
       }
-      if (previous && speakers.some((s) => s.entity_id === previous && s.is_available)) select.value = previous;
-      if (!select.value) {
-        const firstOnline = speakers.find((s) => s.is_available);
-        if (firstOnline) select.value = firstOnline.entity_id;
-      }
+      this._selectionInitialized = true;
+      this._selectedSpeakerIds = new Set(selected);
+      this._renderSpeakerOptions();
       if (!this._recording && !this._sending) this._applySpeakerVolume();
       this._syncSpeakerState();
       if (!this._recording && !this._sending) {
@@ -1029,9 +1079,11 @@ class P2TalkGoogleCastPanel extends HTMLElement {
             ? "Micro bị chặn: Home Assistant đang mở bằng HTTP."
             : "Chưa cấu hình URL HTTPS cho Home Assistant; micro bị chặn trên HTTP.",
           "error", this.$("micAction").textContent);
-        } else this._status(available ? "Sẵn sàng. Nhấn giữ micro để nói." :
-          (speakers.length ? "Các loa đã thêm đều offline/không hỗ trợ phát. Kiểm tra Google Cast." :
-            "Chưa có loa. Vào Settings → Devices & services → P2Talk Google Cast → Configure → Add speaker."),
+        } else this._status(available && this._selectedSpeakers().length
+          ? "Sẵn sàng. Nhấn giữ micro để nói."
+          : available ? "Chọn ít nhất một loa để gửi Talk."
+          : (speakers.length ? "Các loa đã thêm đều offline/không hỗ trợ phát. Kiểm tra Google Cast."
+            : "Chưa có loa. Vào Settings → Devices & services → P2Talk Google Cast → Configure → Add speaker."),
           available ? "success" : "error");
       }
     } catch (error) {
@@ -1042,8 +1094,59 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     }
   }
 
+  _renderSpeakerOptions() {
+    const container = this.$("speakerOptions");
+    container.replaceChildren();
+    if (!this._configuredSpeakers.length) {
+      const empty = document.createElement("p");
+      empty.className = "speaker-picker-empty";
+      empty.textContent = "Chưa có loa. Hãy thêm loa trong mục Quản lý loa.";
+      container.append(empty);
+      return;
+    }
+    for (const speaker of this._configuredSpeakers) {
+      const row = document.createElement("label");
+      row.className = "speaker-option";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = speaker.entity_id;
+      checkbox.checked = this._selectedSpeakerIds.has(speaker.entity_id);
+      checkbox.disabled = !this._speakerAvailable(speaker);
+      const text = document.createElement("span");
+      text.className = "speaker-option-name";
+      text.textContent = speaker.friendly_name;
+      const state = document.createElement("small");
+      state.textContent = checkbox.disabled ? "Offline / không hỗ trợ phát" : "Sẵn sàng";
+      row.append(checkbox, text, state);
+      checkbox.addEventListener("change", () => {
+        const selected = new Set(this._selectedSpeakerIds);
+        if (checkbox.checked) selected.add(speaker.entity_id);
+        else selected.delete(speaker.entity_id);
+        this._setSelectedSpeakers([...selected]);
+      });
+      container.append(row);
+    }
+  }
+
+  _setSelectedSpeakers(ids) {
+    if (this._recording || this._sending) return;
+    const allowed = new Set(this._configuredSpeakers.filter((s) => this._speakerAvailable(s)).map((s) => s.entity_id));
+    const valid = [...new Set(ids.filter((id) => allowed.has(id)))];
+    this._selectedSpeakerIds = new Set(valid.slice(0, MAX_TARGET_SPEAKERS));
+    if (valid.length > MAX_TARGET_SPEAKERS) {
+      this._status(`Có thể chọn tối đa ${MAX_TARGET_SPEAKERS} loa mỗi lần gửi.`, "error");
+    }
+    saveSpeakerPreferences([...this._selectedSpeakerIds]);
+    for (const input of this.$("speakerOptions").querySelectorAll("input")) {
+      input.checked = this._selectedSpeakerIds.has(input.value);
+    }
+    this._applySpeakerVolume();
+    this._syncSpeakerState();
+  }
+
   _applySpeakerVolume() {
-    const current = this._configuredSpeakers.find((s) => s.entity_id === this.$("speaker").value);
+    // A single volume slider is applied to every selected speaker at playback.
+    const current = this._selectedSpeakers()[0];
     const volume = current?.configured_volume ?? 0.65;
     const percentage = Math.min(100, Math.max(5, Math.round(volume * 100)));
     this.$("volume").value = String(percentage);
@@ -1053,20 +1156,20 @@ class P2TalkGoogleCastPanel extends HTMLElement {
 
   _syncSpeakerState() {
     if (!this.$ || !this.$("speaker")) return;
-    const selected = this.$("speaker").value;
-    const speaker = this._configuredSpeakers.find(s => s.entity_id === selected);
-    const state = this._hass?.states?.[selected]?.state || speaker?.state;
-    const online = !!speaker?.is_available && state !== "unavailable" && state !== "unknown";
+    const speakers = this._selectedSpeakers();
+    const count = speakers.length;
+    const names = speakers.map((s) => s.friendly_name);
+    this.$("speakerSummaryText").textContent = count === 0 ? "Chọn một hoặc nhiều loa..."
+      : count === 1 ? names[0]
+      : count === 2 ? names.join(" + ")
+      : `Đã chọn ${count} loa`;
+    this.$("inlineState").className = `speaker-availability ${count ? "online" : ""}`;
+    this.$("inlineStateText").textContent = count ? `${count} loa` : "Chưa chọn";
     const meta = this.$("speakerMeta");
-    const text = !selected ? "Chọn loa đã cấu hình trong Home Assistant" : !online ? "Thiết bị không khả dụng · Kiểm tra kết nối" : state === "playing" ? "Loa đang phát · Sẵn sàng nhận giọng nói" : "Loa đã kết nối · Sẵn sàng nhận giọng nói";
-    const cls = !selected ? "speaker-meta" : `speaker-meta ${online ? "online" : "offline"}`;
-    if (meta.className !== cls) meta.className = cls;
-    if (this.$("speakerState").textContent !== text) this.$("speakerState").textContent = text;
-    const inline = this.$("inlineState");
-    if (inline) {
-      inline.className = `speaker-availability ${selected ? (online ? "online" : "offline") : ""}`;
-      this.$("inlineStateText").textContent = !selected ? "Chọn loa" : online ? "Đang online" : "Offline";
-    }
+    meta.className = `speaker-meta ${count ? "online" : ""}`;
+    this.$("speakerState").textContent = count
+      ? `${count} loa đã chọn · Sẵn sàng nhận giọng nói`
+      : "Chọn ít nhất một loa để gửi Talk";
     this._refreshControls();
   }
 
@@ -1116,7 +1219,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
   }
 
   async _startRecording() {
-    if (this._recording || this._sending || !this.$("speaker").value || this._pressed) return;
+    if (this._recording || this._sending || !this._selectedSpeakers().length || this._pressed) return;
     // Microphone permission is granted only to the current secure document;
     // HTTP-to-HTTPS routing is handled on panel load, never by opening a tab.
     if (!window.isSecureContext) {
@@ -1124,6 +1227,8 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       return;
     }
     this._pressed = true;
+    this._recordingSpeakerIds = this._selectedSpeakers().map((s) => s.entity_id);
+    this.$("speaker").open = false;
     this._discard = false;
     try {
       if (typeof navigator.mediaDevices?.getUserMedia !== "function" || typeof window.MediaRecorder !== "function") {
@@ -1170,7 +1275,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     clearInterval(this._timer);
     this._timer = null;
     this.$("stage").classList.remove("recording");
-    if (!cancel) this.$("stage").classList.add("sending");
+    if (!cancel) { this.$("stage").classList.add("sending"); this._sending = true; }
     this.$("hint").textContent = cancel ? "Đã hủy" : "ĐANG GỬI ĐẾN LOA...";
     this.$("micText").innerHTML = cancel ? "Nhấn giữ<br>để nói" : "Đang gửi<br>âm thanh";
     if (!cancel) this._status("Đang chuyển và gửi âm thanh đến loa...", "loading");
@@ -1184,9 +1289,10 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._stopTracks();
     if (this._discard || !this._chunks.length || !this.isConnected) {
       this._chunks = [];
+      this._sending = false;
+      this._recordingSpeakerIds = null;
       this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
-      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
       this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
       this.$("counter").textContent = "Thả nút để phát đến loa đã chọn";
       this._refreshControls();
@@ -1196,17 +1302,19 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._chunks = [];
     const blob = new Blob(chunks, { type:this._recorder?.mimeType || "audio/webm" });
     if (blob.size > this._maxBytes) {
+      this._sending = false;
+      this._recordingSpeakerIds = null;
       this._status("Bản ghi âm quá lớn. Hãy ghi ngắn hơn.", "error");
       this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
       this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
-      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
+      this._refreshControls();
       return;
     }
     this._sending = true;
     this.$("metrics").textContent = "";
     this._refreshControls();
-    const speaker = this.$("speaker").value;
+    const speakers = this._recordingSpeakerIds || this._selectedSpeakers().map((s) => s.entity_id);
     let uploadId = null;
     try {
       const response = await this._hass.callWS({ type:`${DOMAIN}/upload_start`, mime_type: blob.type.split(";")[0] });
@@ -1228,14 +1336,20 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       }
       const result = await this._hass.callWS({
         type:`${DOMAIN}/upload_finish`, upload_id:uploadId,
-        speaker, volume:Number(this.$("volume").value)/100,
+        speakers, volume:Number(this.$("volume").value)/100,
       });
       if (result.performance) {
         const m = result.performance;
         this.$("metrics").textContent = `Chuyển dữ liệu: ${m.transfer_ms} ms · FFmpeg: ${m.convert_ms} ms · Lệnh HA: ${m.service_ms} ms. Thời gian loa bắt đầu phát có thể lâu hơn.`;
       }
       uploadId = null;
-      this._status(`Đã gửi giọng nói đến ${this.$("speaker").selectedOptions[0]?.textContent || speaker}.`, "success");
+      const sent = result.speakers || (result.speaker ? [result.speaker] : []);
+      const failures = result.failed_speakers || [];
+      const speakerNames = sent.map((id) => this._configuredSpeakers.find((s) => s.entity_id === id)?.friendly_name || id);
+      this._status(failures.length
+        ? `Đã gửi đến ${sent.length}/${speakers.length} loa. ${failures.length} loa không phát được.`
+        : `Đã gửi giọng nói đến ${speakerNames.length === 1 ? speakerNames[0] : `${sent.length} loa đã chọn`}.`,
+      failures.length ? "error" : "success", failures.length ? "Kiểm tra kết nối và log Home Assistant của loa không phát được." : null);
     } catch (error) {
       this._status(`Không phát được âm thanh (${error.code || "error"}): ${error.message || error}. Xem Settings → System → Logs.`, "error");
       if (uploadId) {
@@ -1244,9 +1358,9 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       }
     } finally {
       this._sending = false;
+      this._recordingSpeakerIds = null;
       this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
-      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
       this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
       this.$("counter").textContent = "Thả nút để phát đến loa đã chọn";
       this._refreshControls();
@@ -1254,12 +1368,14 @@ class P2TalkGoogleCastPanel extends HTMLElement {
   }
 
   async _stopSpeaker() {
-    const speaker = this.$("speaker").value;
-    if (!speaker || !this._hass) return;
+    const speakers = this._selectedSpeakers().map((s) => s.entity_id);
+    if (!speakers.length || !this._hass) return;
     this.$("stop").disabled = true;
     try {
-      await this._hass.callWS({ type:`${DOMAIN}/stop`, speaker });
-      this._status("Đã gửi lệnh dừng phát.", "success");
+      const result = await this._hass.callWS({ type:`${DOMAIN}/stop`, speakers });
+      const stopped = result?.speakers?.length ?? speakers.length;
+      const failed = result?.failed_speakers?.length ?? 0;
+      this._status(failed ? `Đã dừng ${stopped}/${speakers.length} loa.` : `Đã gửi lệnh dừng đến ${stopped} loa.`, failed ? "error" : "success");
     } catch (error) {
       this._status(`Không dừng được loa: ${error.message || error}`, "error");
     } finally { this._refreshControls(); }
