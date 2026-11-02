@@ -9,7 +9,7 @@
 - **Push-to-Talk:** giữ nút micro để ghi âm, thả để phát lên loa đã chọn.
 - **Quản lý loa:** thêm, sửa, đổi tên, đặt âm lượng mặc định và xóa loa trong phần cấu hình tích hợp. Giao diện chỉ hiển thị loa đã thêm.
 - **Hoạt động qua mạng nội bộ:** dùng WebSocket và `media_player` của Home Assistant, không cần tài khoản hoặc API token riêng.
-- **Nhẹ và dễ kiểm tra lỗi:** chỉ chuyển đổi âm thanh bằng FFmpeg khi cần; hỗ trợ log và diagnostics.
+- **Giao diện sáng/tối tự thích ứng**, icon mới, trạng thái ghi âm/phát và sóng âm trực quan; **nhẹ và dễ kiểm tra lỗi:** chỉ chuyển đổi âm thanh bằng FFmpeg khi cần; hỗ trợ log và diagnostics.
 - **Cấu hình bằng giao diện:** cài qua HACS/Marketplace, sử dụng trong panel của Home Assistant.
 
 ## Cài đặt

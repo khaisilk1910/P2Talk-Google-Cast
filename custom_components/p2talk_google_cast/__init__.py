@@ -29,12 +29,15 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
             StaticPathConfig(f"/{DOMAIN}_assets", str(Path(__file__).parent / "frontend"), cache_headers=True)
         ])
         hass.data[_ASSETS_REGISTERED] = True
+    # Cache-bust the browser JS after every installation/update without hardcoding
+    # a release version or hashing the asset during Home Assistant startup.
+    panel_asset_version = (Path(__file__).parent / "frontend" / "panel.js").stat().st_mtime_ns
     await panel_custom.async_register_panel(
         hass, frontend_url_path=PANEL_PATH,
         webcomponent_name="p2talk-google-cast-panel",
-        module_url=f"/{DOMAIN}_assets/panel.js?v=1.1.0",
+        module_url=f"/{DOMAIN}_assets/panel.js?v={panel_asset_version}",
         sidebar_title=NAME,
-        sidebar_icon="mdi:microphone-message",
+        sidebar_icon="mdi:cast-audio",
         require_admin=False, embed_iframe=False,
     )
     register_commands(hass)

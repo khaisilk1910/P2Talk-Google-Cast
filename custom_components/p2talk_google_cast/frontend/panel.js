@@ -8,42 +8,139 @@ const DOMAIN = "p2talk_google_cast";
 const CHUNK_BYTES = 48 * 1024;
 const UPLOAD_WINDOW = 6; // amortize Wi-Fi/WebSocket RTT while keeping ordering
 const STORAGE_PREFIX = "p2talk_google_cast_";
+function readSpeakerPreference() {
+  try { return localStorage.getItem(`${STORAGE_PREFIX}speaker`); }
+  catch (_) { return null; } // Private browsing / embedded WebViews may block storage.
+}
+function saveSpeakerPreference(value) {
+  try { localStorage.setItem(`${STORAGE_PREFIX}speaker`, value); }
+  catch (_) { /* Device selection still works without persistence. */ }
+}
+
+// Inline, dependency-free SVG icons. No external fonts, icon CDN or runtime package.
+const glyphs = {
+  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"/>',
+  cast: '<path d="M3 15a6 6 0 0 1 6 6M3 10a11 11 0 0 1 11 11M3 21h.01M9 3h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2"/>',
+  speaker: '<rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="14" r="3.5"/><circle cx="12" cy="7.5" r=".65" fill="currentColor" stroke="none"/>',
+  volume: '<path d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6m3-9a9 9 0 0 1 0 12"/>',
+  refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 9a7 7 0 0 1 12-2l2 5M4 12l2 5a7 7 0 0 0 12-2"/>',
+  stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.07.08-1.84 1.84-.08-.07A1.7 1.7 0 0 0 16 18.4l-1 .4V21h-6v-2.2l-1-.4a1.7 1.7 0 0 0-1.88.34l-.08.07-1.84-1.84.07-.08A1.7 1.7 0 0 0 4.6 15l-.4-1H2v-4h2.2l.4-1a1.7 1.7 0 0 0-.34-1.88l-.07-.08L6.03 5.2l.08.07A1.7 1.7 0 0 0 8 5.6l1-.4V3h6v2.2l1 .4a1.7 1.7 0 0 0 1.88-.34l.08-.07 1.84 1.84-.07.08A1.7 1.7 0 0 0 19.4 9l.4 1H22v4h-2.2l-.4 1Z"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  alert: '<circle cx="12" cy="12" r="10"/><path d="M12 7v6m0 4h.01"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 11v6m0-10h.01"/>',
+  lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+  wifi: '<path d="M2 8.8a15 15 0 0 1 20 0M5 12a10.5 10.5 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M12 19.5h.01"/>',
+  bolt: '<path d="m13 2-9 12h7l-1 8 10-12h-7l0-8Z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+};
+function icon(name, className = "") {
+  return `<svg class="svg-icon ${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${glyphs[name]}</svg>`;
+}
+const mark = `<svg class="mark-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M13 25c-5 5-5 15 0 20m38-20c5 5 5 15 0 20" stroke="white" stroke-width="3" stroke-linecap="round" opacity=".65"/><rect x="27" y="14" width="10" height="29" rx="5" fill="white"/><path d="M21 34a11 11 0 0 0 22 0M32 46v8m-8 0h16" stroke="white" stroke-width="3.5" stroke-linecap="round"/><path d="M43 44h10v11H43" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 49a5 5 0 0 1 5 5" stroke="white" stroke-width="2.3" stroke-linecap="round"/></svg>`;
 
 const styles = `
-:host { display:block; min-height:100%; color:var(--primary-text-color,#f8fafc); font-family:var(--paper-font-body1_-_font-family,system-ui,-apple-system,'Segoe UI',sans-serif); }
+:host { display:block; min-height:100%; color:var(--primary-text-color,#17243a); font-family:var(--paper-font-body1_-_font-family,system-ui,-apple-system,'Segoe UI',sans-serif); --pt-primary:var(--primary-color,#2782ee); --pt-accent:var(--accent-color,#7965e9); --pt-ink:var(--primary-text-color,#17243a); --pt-muted:var(--secondary-text-color,#63738a); --pt-card:var(--card-background-color,#fff); --pt-border:var(--divider-color,#d7e0ed); --pt-tint:color-mix(in srgb,var(--pt-card) 93%,var(--pt-primary) 7%); }
 * { box-sizing:border-box; }
-.wrap { min-height:100%; display:grid; align-items:start; justify-items:center; padding:clamp(16px,4vw,40px) 16px max(28px,env(safe-area-inset-bottom)); background:var(--primary-background-color,#0c1424); }
-.surface { width:min(100%,500px); border:1px solid var(--divider-color,rgba(148,163,184,.18)); border-radius:24px; background:var(--card-background-color,#172033); box-shadow:0 16px 48px rgba(0,0,0,.12); padding:clamp(18px,4vw,32px); }
-.head { display:flex; gap:14px; align-items:center; padding-bottom:22px; margin-bottom:22px; border-bottom:1px solid var(--divider-color,rgba(148,163,184,.18)); }
-.symbol { width:52px; height:52px; border-radius:17px; flex:none; background:linear-gradient(130deg,#2563eb,#0ea5e9); display:grid; place-items:center; font-size:27px; color:white; }
-h1 { margin:0; font-size:21px; font-weight:750; line-height:1.3; letter-spacing:-.4px; }
-.subtitle { margin:4px 0 0; color:var(--secondary-text-color,#94a3b8); font-size:13px; }
-.field { margin:0 0 22px; }
-.field-top { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
-label { font-size:13px; font-weight:650; color:var(--secondary-text-color,#94a3b8); }
-select { width:100%; padding:13px 15px; font-size:16px; border:1px solid var(--divider-color,#526277); border-radius:12px; background:var(--primary-background-color,#0c1424); color:var(--primary-text-color,#fff); }
-input[type=range] { width:100%; accent-color:var(--primary-color,#3498db); }
-.volume { display:flex; align-items:center; gap:13px; border:1px solid var(--divider-color,#526277); padding:9px 14px; border-radius:12px; }
-.volume output { width:46px; text-align:end; font-variant-numeric:tabular-nums; font-size:14px; font-weight:700; }
-.mic-area { display:grid; justify-items:center; padding:18px 0 24px; }
-.mic { border:0; border-radius:50%; width:144px; height:144px; font-size:57px; cursor:pointer; color:white; background:linear-gradient(130deg,#2563eb,#0ea5e9); box-shadow:0 14px 34px rgba(37,99,235,.32); touch-action:none; user-select:none; transition:transform .15s ease,background .15s ease; }
-.mic:hover:not(:disabled) { transform:scale(1.035); }
-.mic.recording { background:linear-gradient(130deg,#dc2626,#f97316); box-shadow:0 14px 36px rgba(220,38,38,.3); animation:pulse 1.5s ease-in-out infinite; }
-.mic:disabled { opacity:.45; cursor:not-allowed; }
-@keyframes pulse { 50% { box-shadow:0 0 0 14px rgba(220,38,38,.08); } }
-.hint { font-size:16px; font-weight:700; margin:20px 0 6px; text-align:center; }
-.counter { color:var(--secondary-text-color,#94a3b8); font-size:13px; height:19px; font-variant-numeric:tabular-nums; }
-.actions { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-button.small { color:var(--primary-text-color,#f8fafc); border:1px solid var(--divider-color,#526277); background:transparent; border-radius:12px; padding:12px 16px; cursor:pointer; font-size:14px; font-weight:650; }
-button.small:disabled { opacity:.4; cursor:default; }
-button.subtle { border:0; padding:5px 9px; color:var(--primary-color,#03a9f4); background:none; cursor:pointer; font-size:13px; font-weight:650; }
-.status { min-height:46px; margin-top:18px; padding:14px; text-align:center; background:var(--primary-background-color,#0c1424); border-radius:12px; border:1px solid var(--divider-color,#526277); font-size:13px; color:var(--secondary-text-color,#94a3b8); overflow-wrap:anywhere; }
-.status.error { color:#ef6c6c; border-color:rgba(239,68,68,.45); }
-.status.success { color:var(--success-color,#22a668); border-color:rgba(16,185,129,.45); }
-.status.loading { color:var(--primary-color,#03a9f4); }
-.note { margin:17px 0 0; line-height:1.5; color:var(--secondary-text-color,#94a3b8); font-size:12px; text-align:center; }
-@media (prefers-reduced-motion:reduce) { .mic { animation:none!important; transition:none; } }
+button,select,input { font:inherit; }
+button:focus-visible,select:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid var(--pt-primary); outline-offset:3px; }
+.svg-icon { width:20px; height:20px; flex:none; }
+.wrap { min-height:100%; display:flex; justify-content:center; align-items:flex-start; padding:clamp(16px,3.3vw,34px) 14px max(28px,env(safe-area-inset-bottom)); /* HA 2026.11 paints the panel background; do not cover it */ background:transparent; }
+.surface { position:relative; isolation:isolate; width:min(100%,640px); border:1px solid var(--pt-border); border-radius:30px; padding:clamp(19px,4vw,32px); background:var(--pt-card); box-shadow:0 18px 55px color-mix(in srgb,var(--pt-ink) 12%,transparent),0 2px 8px color-mix(in srgb,var(--pt-ink) 5%,transparent); overflow:hidden; }
+.surface::before { content:""; position:absolute; inset:0 0 auto; height:230px; z-index:-1; pointer-events:none; background:radial-gradient(ellipse at 80% 0%,color-mix(in srgb,var(--pt-primary) 16%,transparent),transparent 66%),radial-gradient(ellipse at 10% 0%,color-mix(in srgb,var(--pt-accent) 10%,transparent),transparent 55%); }
+.head { display:flex; align-items:center; gap:14px; padding-bottom:22px; margin-bottom:23px; border-bottom:1px solid var(--pt-border); }
+.symbol { width:60px; height:60px; flex:none; border-radius:19px; background:linear-gradient(138deg,#1269e8 0%,#0bbce8 55%,#8456ec 100%); display:grid; place-items:center; box-shadow:0 9px 22px rgba(24,119,240,.22),inset 0 1px 1px rgba(255,255,255,.4); }
+.mark-icon { width:43px; height:43px; }
+.heading { min-width:0; flex:1; }
+.heading .eyebrow { margin:0 0 4px; color:var(--pt-primary); letter-spacing:.13em; font-size:10px; font-weight:800; text-transform:uppercase; }
+h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; margin:0; font-weight:790; }
+.subtitle { margin:5px 0 0; font-size:12px; line-height:1.5; color:var(--pt-muted); }
+.lan-pill { flex:none; display:inline-flex; align-items:center; gap:6px; padding:7px 9px; border-radius:100px; border:1px solid color-mix(in srgb,#16a56b 24%,var(--pt-border)); color:var(--success-color,#118759); background:color-mix(in srgb,var(--pt-card) 88%,#38d39e 12%); font-size:11px; font-weight:750; }
+.lan-pill .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+.section { margin-bottom:22px; }
+.section-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:11px; }
+.section-title { display:inline-flex; align-items:center; gap:9px; color:var(--pt-ink); font-size:14px; font-weight:750; }
+.section-title .svg-icon { color:var(--pt-primary); }
+.small-link { display:inline-flex; align-items:center; gap:6px; border:0; padding:7px 5px; border-radius:8px; background:transparent; color:var(--pt-primary); cursor:pointer; font-size:12px; font-weight:730; text-decoration:none; white-space:nowrap; }
+.small-link:hover { background:var(--pt-tint); }
+.small-link .svg-icon { width:15px; height:15px; }
+.small-link:disabled { opacity:.5; cursor:default; }
+.select-wrap { position:relative; display:flex; align-items:center; border:1px solid var(--pt-border); border-radius:16px; background:var(--pt-tint); transition:border-color .2s,box-shadow .2s; }
+.select-wrap:focus-within { border-color:var(--pt-primary); box-shadow:0 0 0 3px color-mix(in srgb,var(--pt-primary) 14%,transparent); }
+.select-wrap .device-icon { width:44px; height:44px; margin-inline-start:10px; display:grid; flex:none; place-items:center; border-radius:13px; background:linear-gradient(145deg,color-mix(in srgb,var(--pt-primary) 12%,var(--pt-card)),color-mix(in srgb,var(--pt-accent) 12%,var(--pt-card))); color:var(--pt-primary); }
+.select-wrap select { position:relative; z-index:1; appearance:none; background:transparent; color:var(--pt-ink); width:100%; border:0; outline:0; min-width:0; padding:16px 36px 16px 12px; cursor:pointer; font-size:14px; font-weight:720; }
+.select-wrap select:disabled { cursor:default; opacity:.55; }
+.select-wrap select option { background:var(--pt-card); color:var(--pt-ink); }
+.select-chevron { position:absolute; pointer-events:none; right:15px; width:18px; height:18px; color:var(--pt-muted); }
+.speaker-meta { padding:9px 2px 0; display:flex; align-items:center; gap:7px; font-size:11px; color:var(--pt-muted); }
+.speaker-meta .state-dot { width:7px; height:7px; border-radius:100%; background:var(--pt-muted); }
+.speaker-meta.online .state-dot { background:var(--success-color,#16a66b); box-shadow:0 0 0 3px color-mix(in srgb,var(--success-color,#16a66b) 14%,transparent); }
+.speaker-meta.offline .state-dot { background:var(--error-color,#ee5665); }
+.volume-box { border:1px solid var(--pt-border); padding:11px 14px; border-radius:16px; background:var(--pt-tint); display:flex; align-items:center; gap:13px; }
+.volume-box .svg-icon { color:var(--pt-primary); width:21px; height:21px; }
+.volume-box input { width:100%; min-width:0; appearance:none; height:7px; border-radius:10px; cursor:pointer; background:linear-gradient(90deg,var(--pt-primary) 0,var(--pt-primary) var(--progress,65%),color-mix(in srgb,var(--pt-border) 80%,transparent) var(--progress,65%),color-mix(in srgb,var(--pt-border) 80%,transparent) 100%); }
+.volume-box input::-webkit-slider-thumb { appearance:none; width:18px; height:18px; border-radius:50%; border:3px solid var(--pt-card); background:var(--pt-primary); box-shadow:0 1px 5px rgba(0,0,0,.2); }
+.volume-box input::-moz-range-thumb { width:13px; height:13px; border-radius:50%; border:3px solid var(--pt-card); background:var(--pt-primary); box-shadow:0 1px 5px rgba(0,0,0,.2); }
+.volume-box output { padding:5px 8px; min-width:48px; border-radius:9px; font-weight:800; font-size:13px; text-align:center; font-variant-numeric:tabular-nums; color:var(--pt-primary); background:color-mix(in srgb,var(--pt-primary) 10%,var(--pt-card)); }
+.stage { position:relative; padding:8px 0 14px; margin:0 0 8px; text-align:center; overflow:hidden; }
+.stage::before { content:""; position:absolute; top:43px; left:50%; width:410px; height:270px; transform:translateX(-50%); z-index:-1; pointer-events:none; background:radial-gradient(ellipse,color-mix(in srgb,var(--pt-primary) 11%,transparent) 0,transparent 66%); }
+.stage-kicker { display:flex; justify-content:center; gap:7px; align-items:center; font-size:11px; font-weight:750; letter-spacing:.07em; color:var(--pt-muted); text-transform:uppercase; }
+.stage-kicker .svg-icon { width:14px; height:14px; color:var(--pt-primary); }
+.mic-layout { display:flex; align-items:center; justify-content:center; gap:13px; padding:15px 0 1px; }
+.wave { display:flex; align-items:center; justify-content:center; gap:5px; width:92px; height:96px; opacity:.56; pointer-events:none; }
+.wave span { display:block; flex:none; width:4px; height:var(--h); border-radius:10px; background:linear-gradient(180deg,#12bff0,var(--pt-primary),var(--pt-accent)); transform:scaleY(.7); transition:transform .3s; }
+.mic-orbit { display:grid; place-items:center; position:relative; width:202px; height:202px; flex:none; }
+.mic-orbit::before,.mic-orbit::after { content:""; pointer-events:none; position:absolute; inset:7px; border:1px solid color-mix(in srgb,var(--pt-primary) 30%,transparent); border-radius:50%; transition:border-color .2s; }
+.mic-orbit::after { inset:0; border-color:color-mix(in srgb,var(--pt-accent) 20%,transparent); }
+.mic { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:164px; height:164px; border:1px solid rgba(255,255,255,.28); border-radius:50%; cursor:pointer; color:white; background:linear-gradient(145deg,#1458d9,#169def 53%,#7d5be8); box-shadow:0 18px 38px rgba(30,110,236,.26),inset 0 3px 5px rgba(255,255,255,.2),inset 0 -8px 18px rgba(32,31,141,.2); touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; transition:transform .18s,box-shadow .18s,filter .2s; }
+.mic .svg-icon { width:55px; height:55px; stroke-width:1.4; filter:drop-shadow(0 3px 8px rgba(0,0,0,.12)); }
+.mic span { font-size:11px; letter-spacing:.08em; font-weight:830; }
+.mic-orbit:hover::after { animation:slow-orbit 4s ease-in-out infinite; }
+.mic:hover:not(:disabled) { transform:scale(1.035); box-shadow:0 21px 44px rgba(30,110,236,.34); }
+.mic:active:not(:disabled) { transform:scale(.97); }
+.mic:disabled { cursor:not-allowed; opacity:.46; filter:grayscale(.28); box-shadow:none; }
+.stage.recording .mic { background:linear-gradient(145deg,#f43f5e,#ef4444 45%,#fb923c); box-shadow:0 18px 40px rgba(239,68,68,.27); transform:scale(1.03); }
+.stage.recording .mic-orbit::before { border-color:rgba(248,113,113,.7); }
+.stage.recording .mic-orbit::after { border-color:rgba(248,113,113,.4); animation:record-pulse 1.3s ease-out infinite; }
+.stage.recording .wave span { animation:equalize .7s ease-in-out infinite alternate; animation-delay:var(--delay); }
+.stage.sending .mic-orbit::after { border-width:3px; border-top-color:var(--pt-primary); border-right-color:transparent; animation:spin 1s linear infinite; }
+.stage.sending .mic { filter:saturate(.6); }
+.stage.sending .wave span { animation:equalize 1.3s ease-in-out infinite alternate; animation-delay:var(--delay); opacity:.55; }
+.hint { font-size:17px; font-weight:800; letter-spacing:-.2px; margin:7px 0 4px; }
+.counter { font-size:12px; min-height:20px; font-variant-numeric:tabular-nums; color:var(--pt-muted); }
+.actions { display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:4px; }
+.action { display:flex; justify-content:center; align-items:center; gap:9px; padding:13px 12px; border:1px solid var(--pt-border); border-radius:13px; background:var(--pt-tint); color:var(--pt-ink); font-size:13px; font-weight:730; cursor:pointer; transition:transform .15s,background .15s; }
+.action:hover:not(:disabled) { transform:translateY(-1px); background:color-mix(in srgb,var(--pt-primary) 9%,var(--pt-card)); }
+.action .svg-icon { width:17px; height:17px; }
+.action.stop-action { border-color:color-mix(in srgb,var(--pt-primary) 35%,var(--pt-border)); color:var(--pt-primary); background:color-mix(in srgb,var(--pt-primary) 8%,var(--pt-card)); }
+.action:disabled { cursor:not-allowed; opacity:.45; }
+.status { display:flex; text-align:start; align-items:flex-start; gap:11px; min-height:62px; margin-top:18px; padding:14px 15px; border-radius:15px; background:var(--pt-tint); border:1px solid var(--pt-border); color:var(--pt-muted); font-size:12px; line-height:1.55; overflow-wrap:anywhere; }
+.status .status-symbol { display:grid; place-items:center; width:30px; height:30px; flex:none; border-radius:10px; color:var(--pt-primary); background:color-mix(in srgb,var(--pt-primary) 12%,var(--pt-card)); }
+.status .status-symbol .svg-icon { width:17px; height:17px; }
+.status .status-content { align-self:center; }
+.status.success { border-color:color-mix(in srgb,var(--success-color,#10a678) 35%,var(--pt-border)); background:color-mix(in srgb,var(--success-color,#10a678) 7%,var(--pt-card)); color:var(--primary-text-color,#1b2c3c); }
+.status.success .status-symbol { color:var(--success-color,#0c9963); background:color-mix(in srgb,var(--success-color,#10a678) 12%,var(--pt-card)); }
+.status.error { border-color:color-mix(in srgb,var(--error-color,#eb4354) 45%,var(--pt-border)); background:color-mix(in srgb,var(--error-color,#eb4354) 8%,var(--pt-card)); color:var(--error-color,#dc3447); }
+.status.error .status-symbol { color:var(--error-color,#dc3447); background:color-mix(in srgb,var(--error-color,#eb4354) 12%,var(--pt-card)); }
+.status.loading .status-symbol .svg-icon { animation:spin 1.3s linear infinite; }
+.metrics { display:none; margin-top:10px; padding:11px 13px; border-radius:12px; background:var(--pt-tint); color:var(--pt-muted); font-size:11px; line-height:1.5; }
+.metrics:not(:empty) { display:block; }
+.foot { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-top:19px; padding-top:16px; border-top:1px solid var(--pt-border); color:var(--pt-muted); font-size:11px; }
+.foot .privacy { display:flex; align-items:center; gap:8px; }
+.foot .svg-icon { width:15px; height:15px; color:var(--success-color,#10a678); }
+.foot .foot-brand { font-weight:730; color:var(--pt-primary); }
+@keyframes record-pulse { 0% { transform:scale(.92); opacity:.95; } 100% { transform:scale(1.22); opacity:0; } }
+@keyframes slow-orbit { 50% { transform:scale(1.035); opacity:.55; } }
+@keyframes equalize { from { transform:scaleY(.4); } to { transform:scaleY(1.15); } }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media (max-width:520px) { .surface { border-radius:23px; padding:19px 16px; } .symbol { width:52px; height:52px; border-radius:16px; } .mark-icon { width:38px; height:38px; } .lan-pill { padding:6px 8px; font-size:10px; } .wave { width:42px; gap:3px; } .wave span { width:3px; } .wave span:nth-child(n+6) { display:none; } .mic-orbit { width:187px; height:187px; } .mic { width:156px; height:156px; } .mic-layout { gap:0; } }
+@media (max-width:350px) { .lan-pill { display:none; } .wave { display:none; } .mic-layout { margin-inline:auto; } .head { gap:9px; } }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
 `;
+
+const waveMarkup = () => `<div class="wave" aria-hidden="true">${[16,28,43,64,34,48,27,17,12].map((n,i)=>`<span style="--h:${n}px;--delay:${(i*.11).toFixed(2)}s"></span>`).join("")}</div>`;
 
 class P2TalkGoogleCastPanel extends HTMLElement {
   constructor() {
@@ -69,6 +166,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (this.isConnected && !this._loaded) this._loadSpeakers();
+    else if (this.isConnected && this._loaded) this._syncSpeakerState();
   }
   get hass() { return this._hass; }
 
@@ -76,35 +174,42 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>${styles}</style>
       <div class="wrap"><main class="surface">
-        <header class="head"><span class="symbol" aria-hidden="true">🎙</span>
-          <div><h1>P2Talk Google Cast</h1><p class="subtitle">Push-to-Talk · Home Assistant</p></div>
+        <header class="head">
+          <div class="symbol">${mark}</div>
+          <div class="heading"><p class="eyebrow">GIỌNG NÓI · GOOGLE CAST</p><h1>P2Talk Google Cast</h1><p class="subtitle">Nhấn giữ để nói · Thả để phát lên loa</p></div>
+          <span class="lan-pill"><span class="dot"></span>LAN</span>
         </header>
-        <div class="field">
-          <div class="field-top"><label for="speaker">Loa nhận giọng nói</label><button type="button" class="subtle" id="refresh">↻ Làm mới</button></div>
-          <select id="speaker" aria-label="Chọn loa"><option value="">Đang tải loa...</option></select>
-        </div>
-        <div class="field"><div class="field-top"><label for="volume">Âm lượng phát</label></div>
-          <div class="volume"><span aria-hidden="true">🔊</span><input id="volume" type="range" min="5" max="100" value="65" /><output id="volumeText">65%</output></div>
-        </div>
-        <section class="mic-area" aria-label="Ghi âm">
-          <button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để nói" title="Nhấn giữ để nói">🎙</button>
-          <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter"></div>
+        <section class="section" aria-label="Thiết bị phát">
+          <div class="section-top"><label class="section-title" for="speaker">${icon("speaker")} Chọn loa Google Cast</label>
+            <a class="small-link" id="configure" href="/config/integrations/integration/p2talk_google_cast" title="Cấu hình, thêm, sửa hoặc xóa loa">${icon("settings")} Quản lý loa</a></div>
+          <div class="select-wrap"><span class="device-icon">${icon("speaker")}</span><select id="speaker" aria-label="Chọn loa được thêm trong cấu hình"><option value="">Đang tải loa...</option></select>${icon("chevron","select-chevron")}</div>
+          <div class="speaker-meta" id="speakerMeta"><span class="state-dot"></span><span id="speakerState">Đang kiểm tra thiết bị...</span><button type="button" class="small-link" id="refresh" title="Cập nhật danh sách loa">${icon("refresh")} Làm mới</button></div>
         </section>
-        <div class="actions"><button type="button" class="small" id="cancel" disabled>✕ Hủy</button>
-        <button type="button" class="small" id="stop">■ Dừng loa</button></div>
-        <div id="status" class="status" role="status" aria-live="polite">Đang kết nối Home Assistant...</div>
-        <div id="metrics" class="note" aria-live="polite"></div>
-        <p class="note">Âm thanh được gửi qua kết nối Home Assistant đã đăng nhập.<br />Không cần API token hoặc cổng mạng riêng.</p>
+        <section class="section" aria-label="Âm lượng phát"><div class="section-top"><label for="volume" class="section-title">${icon("volume")} Âm lượng phát</label></div>
+          <div class="volume-box">${icon("volume")}<input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng phát" style="--progress:65%"/><output id="volumeText" for="volume">65%</output></div>
+        </section>
+        <section class="stage" id="stage" aria-label="Nhấn giữ để nói">
+          <div class="stage-kicker">${icon("wifi")} Kết nối nội bộ qua Home Assistant</div>
+          <div class="mic-layout">${waveMarkup()}<div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span>NHẤN GIỮ</span></button></div>${waveMarkup()}</div>
+          <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát đến loa đã chọn</div>
+        </section>
+        <div class="actions"><button type="button" class="action" id="cancel" disabled>${icon("close")} Hủy ghi âm</button>
+        <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng loa</button></div>
+        <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><span id="statusText" class="status-content">Đang kết nối Home Assistant...</span></div>
+        <div id="metrics" class="metrics" aria-live="polite"></div>
+        <footer class="foot"><span class="privacy">${icon("lock")} Âm thanh qua Home Assistant đã đăng nhập · Không cần token</span><span class="foot-brand">P2Talk · Google Cast</span></footer>
       </main></div>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.$("refresh").addEventListener("click", () => this._loadSpeakers());
     this.$("speaker").addEventListener("change", (e) => {
-      localStorage.setItem(`${STORAGE_PREFIX}speaker`, e.target.value);
+      saveSpeakerPreference(e.target.value);
       this._applySpeakerVolume();
+      this._syncSpeakerState();
       this._refreshControls();
     });
     this.$("volume").addEventListener("input", (e) => {
       this.$("volumeText").textContent = `${e.target.value}%`;
+      this.$("volume").style.setProperty("--progress", `${e.target.value}%`);
       // Volume overrides configuration only for this selected playback; not stored.
     });
     this.$("cancel").addEventListener("click", () => this._stopRecording(true));
@@ -147,6 +252,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
   disconnectedCallback() {
     if (this._visibilityHandler) document.removeEventListener("visibilitychange", this._visibilityHandler);
     if (this._timer) clearInterval(this._timer);
+    this._pressed = false;
     if (this._recorder && this._recorder.state !== "inactive") {
       this._discard = true;
       this._recorder.stop();
@@ -156,7 +262,10 @@ class P2TalkGoogleCastPanel extends HTMLElement {
 
   _status(message, type = "") {
     const el = this.$("status");
-    if (el) { el.textContent = message; el.className = `status ${type}`; }
+    if (!el) return;
+    this.$("statusText").textContent = message;
+    this.$("statusIcon").innerHTML = icon(type === "success" ? "check" : type === "error" ? "alert" : type === "loading" ? "refresh" : "info");
+    el.className = `status ${type}`;
   }
 
   _refreshControls() {
@@ -169,6 +278,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this.$("stop").disabled = this._sending || !selected;
     this.$("cancel").disabled = !this._recording;
     this.$("refresh").disabled = this._recording || this._sending;
+    this.$("configure").style.pointerEvents = this._recording || this._sending ? "none" : "";
   }
 
   async _loadSpeakers(silent = false) {
@@ -181,7 +291,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._maxSeconds = response.max_seconds || 120;
       this._maxBytes = response.max_bytes || this._maxBytes;
       const select = this.$("speaker");
-      const previous = select.value || localStorage.getItem(`${STORAGE_PREFIX}speaker`);
+      const previous = select.value || readSpeakerPreference();
       select.replaceChildren();
       const speakers = response.speakers || [];
       this._configuredSpeakers = speakers;
@@ -192,7 +302,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       for (const speaker of speakers) {
         const option = document.createElement("option");
         option.value = speaker.entity_id;
-        option.textContent = `${speaker.friendly_name} (${speaker.state})`;
+        option.textContent = speaker.friendly_name;
         option.disabled = !speaker.is_available;
         select.append(option);
       }
@@ -202,6 +312,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         if (firstOnline) select.value = firstOnline.entity_id;
       }
       if (!this._recording && !this._sending) this._applySpeakerVolume();
+      this._syncSpeakerState();
       if (!this._recording && !this._sending) {
         const available = speakers.some((s) => s.is_available);
         this._status(available ? "Sẵn sàng. Nhấn giữ micro để nói." :
@@ -223,6 +334,20 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     const percentage = Math.min(100, Math.max(5, Math.round(volume * 100)));
     this.$("volume").value = String(percentage);
     this.$("volumeText").textContent = `${percentage}%`;
+    this.$("volume").style.setProperty("--progress", `${percentage}%`);
+  }
+
+  _syncSpeakerState() {
+    if (!this.$ || !this.$("speaker")) return;
+    const selected = this.$("speaker").value;
+    const speaker = this._configuredSpeakers.find(s => s.entity_id === selected);
+    const state = this._hass?.states?.[selected]?.state || speaker?.state;
+    const online = !!speaker?.is_available && state !== "unavailable" && state !== "unknown";
+    const meta = this.$("speakerMeta");
+    const text = !selected ? "Chọn loa đã cấu hình trong Home Assistant" : !online ? "Thiết bị không khả dụng · Kiểm tra kết nối" : state === "playing" ? "Loa đang phát · Sẵn sàng nhận giọng nói" : "Loa đã kết nối · Sẵn sàng nhận giọng nói";
+    const cls = !selected ? "speaker-meta" : `speaker-meta ${online ? "online" : "offline"}`;
+    if (meta.className !== cls) meta.className = cls;
+    if (this.$("speakerState").textContent !== text) this.$("speakerState").textContent = text;
   }
 
   _stopTracks() {
@@ -253,7 +378,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._recorder.start(250);
       this._recording = true;
       this._started = Date.now();
-      this.$("mic").classList.add("recording");
+      this.$("stage").classList.add("recording");
       this.$("hint").textContent = "ĐANG GHI ÂM — THẢ ĐỂ PHÁT";
       this._status("Đang thu âm giọng nói...", "loading");
       this._timer = setInterval(() => {
@@ -276,8 +401,10 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._discard = cancel;
     clearInterval(this._timer);
     this._timer = null;
-    this.$("mic").classList.remove("recording");
+    this.$("stage").classList.remove("recording");
+    if (!cancel) this.$("stage").classList.add("sending");
     this.$("hint").textContent = cancel ? "Đã hủy" : "ĐANG GỬI ĐẾN LOA...";
+    if (!cancel) this._status("Đang chuyển và gửi âm thanh đến loa...", "loading");
     this._refreshControls();
     if (cancel) this._status("Đã hủy bản ghi âm.");
     if (this._recorder && this._recorder.state !== "inactive") this._recorder.stop();
@@ -288,8 +415,10 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._stopTracks();
     if (this._discard || !this._chunks.length || !this.isConnected) {
       this._chunks = [];
+      this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
-      this.$("counter").textContent = "";
+      this.$("counter").textContent = "Thả nút để phát đến loa đã chọn";
+      this._refreshControls();
       return;
     }
     const chunks = this._chunks;
@@ -297,6 +426,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     const blob = new Blob(chunks, { type:this._recorder?.mimeType || "audio/webm" });
     if (blob.size > this._maxBytes) {
       this._status("Bản ghi âm quá lớn. Hãy ghi ngắn hơn.", "error");
+      this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
       return;
     }
@@ -341,8 +471,9 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       }
     } finally {
       this._sending = false;
+      this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
-      this.$("counter").textContent = "";
+      this.$("counter").textContent = "Thả nút để phát đến loa đã chọn";
       this._refreshControls();
     }
   }

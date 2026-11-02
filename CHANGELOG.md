@@ -1,5 +1,12 @@
 # Changelog — P2Talk Google Cast
 
+## Unreleased — UI Redesign
+
+- Thiết kế lại panel cho theme sáng/tối với SVG icons, micro gradient, sóng âm, trạng thái ghi âm/gửi dữ liệu và khả năng truy cập tốt hơn.
+- Bổ sung icon thương hiệu micro + Cast (PNG 256px/512px) trong `brand/`, phù hợp Home Assistant 2026.3+.
+- Không thêm JS dependencies; hiệu ứng chỉ chạy khi tương tác, ghi âm hoặc truyền để tiết kiệm tài nguyên, tôn trọng reduced-motion.
+- Nút quản lý loa mở cấu hình tích hợp; tăng độ bền khi localStorage bị chặn; URL JS tự tránh cache cũ sau khi cập nhật.
+
 ## Unreleased — CI / Packaging
 
 - Thêm GitHub Actions release workflow đồng bộ `manifest.json` trước khi commit/tag/publish; ngăn tag trùng, downgrade và version sai định dạng.
