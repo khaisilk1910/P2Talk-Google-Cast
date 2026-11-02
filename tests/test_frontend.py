@@ -47,10 +47,10 @@ class FrontendAssetsTests(unittest.TestCase):
     def test_concept_match_is_real_functional_ui(self):
         """Decorative artwork must not replace live controls or require cloud assets."""
         source = (COMPONENT / 'frontend' / 'panel.js').read_text()
-        asset = COMPONENT / 'frontend' / 'nest-speaker.webp'
+        asset = COMPONENT / 'frontend' / 'home-speaker-2026.webp'
         self.assertTrue(asset.exists())
         self.assertLess(asset.stat().st_size, 32 * 1024)
-        self.assertIn('nest-speaker.webp', source)
+        self.assertIn('home-speaker-2026.webp', source)
         for identifier in ('id="speaker"', 'id="volume"', 'id="mic"',
                            'id="cancel"', 'id="stop"', 'id="status"',
                            'id="connectionPill"', 'id="inlineState"'):

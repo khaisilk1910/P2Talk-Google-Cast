@@ -1,3 +1,6 @@
+## Unreleased — Aurora Visual Refresh
+- Header speaker artwork, unified aurora background and action button improvements.
+
 ## Unreleased — Automatic HTTPS on panel open
 
 - Khi P2Talk được mở trong phiên Home Assistant HTTP, tự động chuyển sang HTTPS External/Internal URL do Home Assistant quản lý **trước khi nhấn micro**, không cần nhấn lần đầu hoặc thao tác refresh thủ công.

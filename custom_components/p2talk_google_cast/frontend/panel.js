@@ -130,7 +130,6 @@ function microphoneAdvice(error, environment = microphoneEnvironment()) {
   };
 }
 
-const mark = `<svg class="mark-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M13 25c-5 5-5 15 0 20m38-20c5 5 5 15 0 20" stroke="white" stroke-width="3" stroke-linecap="round" opacity=".65"/><rect x="27" y="14" width="10" height="29" rx="5" fill="white"/><path d="M21 34a11 11 0 0 0 22 0M32 46v8m-8 0h16" stroke="white" stroke-width="3.5" stroke-linecap="round"/><path d="M43 44h10v11H43" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 49a5 5 0 0 1 5 5" stroke="white" stroke-width="2.3" stroke-linecap="round"/></svg>`;
 
 const styles = `
 :host { display:block; min-height:100%; color:var(--primary-text-color,#17243a); font-family:var(--paper-font-body1_-_font-family,system-ui,-apple-system,'Segoe UI',sans-serif); --pt-primary:var(--primary-color,#2782ee); --pt-accent:var(--accent-color,#7965e9); --pt-ink:var(--primary-text-color,#17243a); --pt-muted:var(--secondary-text-color,#63738a); --pt-card:var(--card-background-color,#fff); --pt-border:var(--divider-color,#d7e0ed); --pt-tint:color-mix(in srgb,var(--pt-card) 93%,var(--pt-primary) 7%); }
@@ -483,6 +482,209 @@ h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; mar
 .mic-help pre { padding:9px 11px; max-width:100%; overflow-x:auto; white-space:pre-wrap; word-break:break-word; border:1px solid var(--pt-border); border-radius:9px; color:var(--pt-muted); font:11px/1.5 ui-monospace,monospace; }
 .mic-help .copy-diagnostics { margin-top:2px; border:1px solid var(--pt-border); background:var(--pt-card); color:var(--pt-ink); padding:7px 10px; border-radius:9px; cursor:pointer; font-size:12px; font-weight:730; }
 
+
+/* 2026 Aurora Refresh: speaker-first identity, contiguous hero/body, reactive effects.
+   Decorative effects are CSS only; no timers, remote assets, third-party libraries.
+   Static idle state avoids continuous paints, especially in mobile WebViews. */
+:host {
+  --aurora-ice:#7ceafa; --aurora-blue:#258ffc; --aurora-purple:#997cff;
+  --aurora-border:rgba(128,193,255,.35);
+}
+.surface {
+  background:linear-gradient(145deg,#16396b 0%,#142a4e 58%,#13213f 100%);
+  border-color:rgba(106,175,249,.48);
+  box-shadow:0 18px 56px rgba(8,40,89,.22),0 0 0 1px rgba(123,190,255,.08) inset;
+}
+/* The colored panel below the header is visually part of the same aurora canvas. */
+.head {
+  background:linear-gradient(120deg,#153f7d 0%,#1b5ba7 52%,#15366d 100%);
+  border:0;
+}
+.hero-glow {
+  opacity:1;
+  background:radial-gradient(ellipse at 15% 5%,rgba(166,226,255,.42),transparent 48%),
+             radial-gradient(ellipse at 84% 85%,rgba(106,58,247,.33),transparent 52%),
+             radial-gradient(ellipse at 58% 106%,rgba(37,198,255,.40),transparent 48%);
+}
+.hero-waves { opacity:.55; filter:drop-shadow(0 -2px 5px rgba(65,189,255,.35)); }
+.head .symbol {
+  position:relative; border-radius:28px; border:1px solid rgba(180,232,255,.8);
+  background:linear-gradient(145deg,rgba(39,125,235,.82),rgba(17,46,124,.83));
+  box-shadow:0 0 0 5px rgba(140,206,255,.11),0 12px 25px rgba(3,29,91,.4),inset 0 1px 8px rgba(208,243,255,.24);
+  overflow:visible;
+}
+.head .symbol::before { content:""; position:absolute; inset:-6px; border:1px solid rgba(147,220,255,.24); border-radius:32px; pointer-events:none; }
+.mark-speaker { width:100%; height:100%; object-fit:contain; transform:scale(1.32) translateY(2px); filter:drop-shadow(0 7px 9px rgba(0,14,68,.43)); }
+.mark-cast { position:absolute; bottom:-6px; right:-7px; width:30px; height:30px; display:grid; place-items:center;
+  background:linear-gradient(130deg,#0d82f5,#7759ef); color:#fff; border:1px solid rgba(183,235,255,.8);
+  border-radius:10px; box-shadow:0 4px 14px rgba(1,24,75,.43); }
+.mark-cast .svg-icon { width:19px; height:19px; }
+.hero-speaker { width:185px; right:7px; bottom:-8px; opacity:.87; filter:drop-shadow(0 13px 13px rgba(1,20,63,.5)); }
+.heading h1 { color:#f6faff; text-shadow:0 2px 8px rgba(1,25,78,.28); }
+.heading h1 em { color:#99e6ff; text-shadow:0 0 16px rgba(52,181,255,.35); }
+.heading .subtitle { color:#def3ff; }
+.panel-body {
+  z-index:1;
+  background:
+    radial-gradient(ellipse 115% 44% at 48% 34%,rgba(25,121,233,.21),transparent 64%),
+    radial-gradient(ellipse 85% 52% at 108% 82%,rgba(117,72,206,.18),transparent 67%),
+    radial-gradient(ellipse 70% 32% at -10% 8%,rgba(54,210,255,.14),transparent 68%),
+    linear-gradient(180deg,#173d70 0%,#172b50 19%,#17233f 58%,#131d36 100%);
+  box-shadow:0 -2px 0 rgba(145,213,255,.20),inset 0 13px 25px rgba(35,149,249,.06);
+  color:#ebf6ff;
+}
+.panel-body::before { content:""; position:absolute; inset:0 10px auto; height:1px;
+  background:linear-gradient(90deg,transparent,rgba(124,237,255,.55),transparent); pointer-events:none; }
+.section-title { color:#f0f8ff; font-weight:790; text-shadow:0 1px 4px rgba(0,21,71,.15); }
+.section-title .svg-icon { color:#69d7ff; fill:rgba(88,174,255,.18); }
+.refresh-icon { color:#80d5ff; border-radius:12px; }
+.refresh-icon:hover { color:#fff; background:rgba(73,158,255,.14); }
+.configure-link { color:#bceaff; border-color:rgba(99,193,255,.62); background:linear-gradient(140deg,rgba(41,130,225,.26),rgba(90,70,193,.19)); box-shadow:inset 0 1px 0 rgba(229,248,255,.13); }
+.configure-link:hover { background:rgba(70,149,251,.35); color:#fff; }
+.select-wrap,.volume-box {
+  background:linear-gradient(112deg,rgba(18,43,77,.9),rgba(26,44,79,.74));
+  border:1px solid rgba(117,179,235,.38);
+  box-shadow:0 7px 17px rgba(3,17,52,.19),inset 0 1px 0 rgba(181,226,255,.08);
+  transition:border-color .22s,box-shadow .22s,transform .18s;
+}
+.select-wrap:hover,.volume-box:hover { border-color:rgba(128,224,255,.75); box-shadow:0 8px 21px rgba(1,21,73,.25),0 0 0 2px rgba(78,176,252,.07); }
+.select-wrap select { color:#f4f9ff; }
+.select-wrap select option { color:var(--pt-ink); background:var(--pt-card); }
+.select-chevron { color:#b5d9f8; }
+.select-wrap .device-icon { background:radial-gradient(ellipse,rgba(79,159,236,.23),rgba(18,42,80,.55)); }
+.speaker-availability { color:#bcd1e8; }
+.speaker-meta { color:#b7cde5; }
+.volume-box .svg-icon,.volume-box .volume-max { color:#82d5ff; }
+.volume-box input { background:linear-gradient(90deg,#00c4fa 0%,#148cf8 var(--progress,65%),rgba(154,179,221,.44) var(--progress,65%),rgba(154,179,221,.44) 100%); }
+.volume-box input::-webkit-slider-thumb { box-shadow:0 0 0 4px rgba(38,192,255,.2),0 0 16px rgba(31,159,255,.48); }
+.volume-box output { color:#e4f6ff; background:linear-gradient(135deg,rgba(21,124,227,.48),rgba(109,89,228,.35)); border:1px solid rgba(91,166,255,.28); }
+.stage { background:radial-gradient(ellipse at 50% 49%,rgba(28,163,255,.23),transparent 66%); }
+.stage::before { background:radial-gradient(ellipse at 50% 50%,rgba(33,161,255,.27),transparent 67%); }
+.mic-orbit::before { border-color:rgba(118,241,255,.74); box-shadow:0 0 24px rgba(46,214,255,.23),inset 0 0 17px rgba(87,196,255,.13); }
+.mic-orbit::after { border-color:rgba(155,138,255,.47); }
+.mic {
+  background:radial-gradient(circle at 35% 14%,#23ddfb 0%,#148ef9 36%,#075de7 75%,#633fe2 100%);
+  box-shadow:0 13px 33px rgba(0,69,222,.40),0 0 28px rgba(70,202,255,.46),
+             inset 0 4px 7px rgba(255,255,255,.4),inset 0 -11px 25px rgba(23,35,156,.24);
+}
+.mic:hover:not(:disabled) { box-shadow:0 17px 39px rgba(0,75,233,.46),0 0 38px rgba(66,206,255,.64); }
+.stage.recording .mic-orbit::before { border-color:rgba(255,161,157,.92); box-shadow:0 0 35px rgba(255,79,94,.39); }
+.stage.recording .mic { box-shadow:0 15px 38px rgba(236,57,106,.44),0 0 28px rgba(251,114,111,.43); }
+.stage.sending .mic-orbit::before { border-color:#8cd0ff; }
+.wave span { box-shadow:0 0 10px rgba(54,188,255,.4); }
+/* Buttons remain clearly legible in their disabled state; visual hierarchy remains obvious. */
+.actions { gap:14px; }
+.action { min-height:52px; border-radius:17px; font-size:14px; font-weight:820; letter-spacing:.08px;
+  transition:transform .18s ease,box-shadow .18s ease,filter .18s ease,background .18s ease; }
+.action.cancel-action {
+  color:#ffdce3; border:1px solid rgba(255,132,152,.48);
+  background:linear-gradient(115deg,rgba(109,38,74,.74),rgba(79,37,68,.83));
+  box-shadow:inset 0 1px 0 rgba(255,220,229,.13),0 5px 14px rgba(24,12,44,.16);
+}
+.action.cancel-action .svg-icon { color:#ff9aa9; }
+.action.cancel-action:hover:not(:disabled) { background:linear-gradient(110deg,#a43a67,#c04873); color:white; box-shadow:0 7px 22px rgba(194,71,104,.25); }
+.action.stop-action {
+  color:#fff; border:1px solid #7bd9ff;
+  background:linear-gradient(110deg,#087ced 0%,#2389fb 47%,#705dec 100%);
+  box-shadow:0 5px 20px rgba(28,101,239,.34),inset 0 1px 0 rgba(255,255,255,.38);
+}
+.action.stop-action:hover:not(:disabled) { background:linear-gradient(115deg,#1899ff,#6056f7); box-shadow:0 9px 27px rgba(31,140,255,.48),0 0 13px rgba(114,112,255,.21); }
+.action.stop-action .svg-icon { fill:rgba(255,255,255,.92); stroke:rgba(255,255,255,.92); }
+.action:active:not(:disabled) { transform:translateY(1px) scale(.985); }
+.action:disabled { opacity:.58; filter:saturate(.64); box-shadow:none; }
+.action.stop-action:disabled { opacity:.88; filter:saturate(.8); }
+.status { box-shadow:0 7px 17px rgba(3,22,53,.18),inset 0 1px 0 rgba(255,255,255,.10); }
+.status.success { background:linear-gradient(110deg,#145a59,#206b63 63%,#265b6b); border-color:rgba(88,220,187,.6); }
+.status.success .status-content { color:#e4fff5; }
+.status.success small { color:#b5e9d9; }
+.status.loading { background:linear-gradient(110deg,#183f70,#26547b); border-color:rgba(89,170,242,.62); }
+.status.loading .status-content { color:#edf7ff; }
+.status.loading small { color:#bddcf3; }
+.status.error { background:linear-gradient(110deg,#632744,#422a53); border-color:rgba(243,121,156,.59); }
+.status.error .status-content { color:#fff0f4; }
+.status.error small { color:#ffc3d6; }
+.status-equalizer i { background:#47deb5; }
+.foot { color:#a9bdd9; }
+.foot .svg-icon { color:#55ddac; }
+.mic-help { background:linear-gradient(120deg,rgba(17,47,80,.89),rgba(29,37,67,.91)); border-color:rgba(125,185,244,.31); color:#d9eaff; }
+.mic-help pre { color:#c7d5e9; }
+.metrics { background:rgba(16,49,87,.56); color:#bfdaef; border:1px solid rgba(116,183,240,.18); }
+/* Light HA themes: keep aurora palette while adjusting panel/control contrast. */
+:host([data-dark="false"]) .surface { box-shadow:0 19px 54px rgba(26,77,142,.17); }
+:host([data-dark="false"]) .head { background:linear-gradient(115deg,#2566ac,#327fc8 55%,#184887); }
+:host([data-dark="false"]) .panel-body {
+  background:radial-gradient(ellipse 95% 51% at 44% 41%,rgba(91,166,255,.23),transparent 67%),
+             radial-gradient(ellipse 68% 46% at 105% 78%,rgba(146,122,245,.18),transparent 70%),
+             linear-gradient(180deg,#c3dfff 0%,#daeafa 23%,#e8eeff 63%,#e4ebf7 100%);
+  color:#19375f;
+}
+:host([data-dark="false"]) .section-title { color:#1e416b; text-shadow:none; }
+:host([data-dark="false"]) .section-title .svg-icon { color:#1578dd; }
+:host([data-dark="false"]) .select-wrap,:host([data-dark="false"]) .volume-box {
+  background:linear-gradient(110deg,rgba(255,255,255,.83),rgba(237,247,255,.74));
+  border-color:rgba(93,148,204,.40); box-shadow:0 7px 18px rgba(64,125,186,.12),inset 0 1px 0 white;
+}
+:host([data-dark="false"]) .select-wrap select { color:#203b63; }
+:host([data-dark="false"]) .speaker-availability,:host([data-dark="false"]) .speaker-meta { color:#567393; }
+:host([data-dark="false"]) .volume-box .svg-icon { color:#2787da; }
+:host([data-dark="false"]) .volume-box output { background:linear-gradient(125deg,#b8dbff,#d6eaff); color:#0c57a7; }
+:host([data-dark="false"]) .configure-link { color:#175aa0; border-color:#6bb4ee; background:rgba(234,248,255,.74); }
+:host([data-dark="false"]) .action.cancel-action { color:#8c3d55; background:linear-gradient(115deg,#ffe4eb,#f7d9e5); border-color:#eb9fb2; }
+:host([data-dark="false"]) .action.cancel-action .svg-icon { color:#bc4e6c; }
+:host([data-dark="false"]) .action.cancel-action:hover:not(:disabled) { background:#f3c1d1; color:#8b183b; }
+:host([data-dark="false"]) .status.success { background:linear-gradient(105deg,#c4f5e4,#b8e7e9); border-color:#81d4bb; }
+:host([data-dark="false"]) .status.success .status-content { color:#17654e; }
+:host([data-dark="false"]) .status.success small { color:#376e61; }
+:host([data-dark="false"]) .status.loading { background:linear-gradient(110deg,#d4eaff,#c7effc); border-color:#9ed2f9; }
+:host([data-dark="false"]) .status.loading .status-content { color:#1a557e; }
+:host([data-dark="false"]) .status.loading small { color:#456f90; }
+:host([data-dark="false"]) .status.error { background:linear-gradient(105deg,#ffdae3,#f9e6f4); border-color:#eda9c0; }
+:host([data-dark="false"]) .status.error .status-content { color:#8a2e4c; }
+:host([data-dark="false"]) .status.error small { color:#9b4c65; }
+:host([data-dark="false"]) .foot { color:#527395; }
+:host([data-dark="false"]) .mic-help { background:rgba(242,249,255,.93); color:#254363; }
+:host([data-dark="false"]) .mic-help pre { color:#4e6c89; }
+:host([data-dark="false"]) .metrics { background:rgba(238,247,255,.88); color:#567393; }
+/* Keep the same dark finish if a legacy HA theme reports darkMode=true. */
+:host([data-dark="true"]) .head { background:linear-gradient(120deg,#153d76,#1c5596 52%,#102b60); }
+:host([data-dark="true"]) .panel-body {
+  background:radial-gradient(ellipse 115% 44% at 48% 34%,rgba(25,121,233,.21),transparent 64%),
+    radial-gradient(ellipse 85% 52% at 108% 82%,rgba(117,72,206,.18),transparent 67%),
+    linear-gradient(180deg,#173c70 0%,#172b50 19%,#17233f 58%,#131d36 100%);
+}
+:host([data-dark="true"]) .select-wrap,:host([data-dark="true"]) .volume-box { background:linear-gradient(112deg,rgba(18,43,77,.9),rgba(26,44,79,.74)); }
+:host([data-dark="true"]) .status.success { background:linear-gradient(110deg,#145a59,#206b63 63%,#265b6b); border-color:rgba(88,220,187,.6); }
+:host([data-dark="true"]) .status.success .status-content { color:#e4fff5; }
+:host([data-dark="true"]) .status.success small { color:#b5e9d9; }
+:host([data-dark="true"]) .status.loading { background:linear-gradient(110deg,#183f70,#26547b); }
+:host([data-dark="true"]) .status.loading .status-content { color:#edf7ff; }
+:host([data-dark="true"]) .status.loading small { color:#bddcf3; }
+:host([data-dark="true"]) .status.error { background:linear-gradient(110deg,#632744,#422a53); }
+:host([data-dark="true"]) .status.error .status-content { color:#fff0f4; }
+:host([data-dark="true"]) .status.error small { color:#ffc3d6; }
+@media (max-width:620px) {
+ .head .symbol { border-radius:24px; }
+ .head .symbol::before { border-radius:28px; }
+ .hero-speaker { width:165px; right:-15px; }
+ .mark-cast { width:25px; height:25px; bottom:-5px; right:-4px; }
+ .mark-cast .svg-icon { width:16px; height:16px; }
+ .actions { gap:10px; }
+}
+@media (max-width:430px) {
+ .head .symbol { border-radius:19px; }
+ .head .symbol::before { border-radius:23px; }
+ .hero-speaker { width:119px; right:-28px; }
+ .action { min-height:46px; border-radius:13px; font-size:12px; }
+}
+/* Brief feedback motion when an action finishes; recording effects are state-driven. */
+@keyframes aurora-status-in { from { opacity:.73; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+.status.success,.status.error { animation:aurora-status-in .32s ease-out both; }
+.stage.recording .mic { animation:aurora-record-glow 1.25s ease-in-out infinite alternate; }
+@keyframes aurora-record-glow { from { box-shadow:0 13px 33px rgba(225,43,106,.42),0 0 18px rgba(246,95,107,.35); } to { box-shadow:0 15px 39px rgba(225,43,106,.54),0 0 35px rgba(250,120,119,.67); } }
+@media (prefers-reduced-motion:reduce) { .status.success,.status.error,.stage.recording .mic { animation:none!important; } }
+/* No idle animation. Recording and sending effects remain state-driven. */
+@media (prefers-reduced-motion:reduce) { .action,.select-wrap,.volume-box,.mic { transition:none!important; } }
+
 `;
 
 const waveMarkup = () => `<div class="wave" aria-hidden="true">${[14,27,44,67,35,57,84,48,62,37,75,102,65,46,58,31,18].map((n,i)=>`<span style="--h:${n}px;--delay:${(i*.07).toFixed(2)}s"></span>`).join("")}</div>`;
@@ -528,8 +730,8 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         <header class="head">
           <div class="hero-glow" aria-hidden="true"></div>
           <svg class="hero-waves" viewBox="0 0 680 170" preserveAspectRatio="none" aria-hidden="true"><path d="M0 110C116 190 214 92 333 139S522 104 680 149V170H0Z" fill="#e8f6ff" opacity=".37"/><path d="M0 128C158 200 237 103 364 154S554 83 680 132V170H0Z" fill="#38baf5" opacity=".27"/><path d="M0 155C158 112 234 163 327 143S531 179 680 118V170H0Z" fill="#0797ea" opacity=".36"/></svg>
-          <img class="hero-speaker" src="/${DOMAIN}_assets/nest-speaker.webp" alt="" aria-hidden="true" loading="eager" decoding="async" />
-          <div class="symbol">${mark}</div>
+          <img class="hero-speaker" src="/${DOMAIN}_assets/home-speaker-2026.webp" alt="" aria-hidden="true" loading="eager" decoding="async" />
+          <div class="symbol" aria-hidden="true"><img class="mark-speaker" src="/${DOMAIN}_assets/home-speaker-2026.webp" alt="" decoding="async"/><span class="mark-cast">${icon("cast")}</span></div>
           <div class="heading"><h1>P2Talk <em>Google Cast</em></h1><p class="subtitle">Nhấn giữ để nói, thả để phát giọng nói<br class="hero-desktop-break"/> lên loa Google Cast ngay trong Home Assistant</p></div>
           <span class="lan-pill" id="connectionPill"><span class="dot"></span><span id="connectionLabel">Đang kết nối</span></span>
         </header>
@@ -548,7 +750,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
           <div class="mic-layout">${waveMarkup()}<div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br/>để nói</span></button></div>${waveMarkup()}</div>
           <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát đến loa đã chọn</div>
         </section>
-        <div class="actions"><button type="button" class="action" id="cancel" disabled>${icon("close")} Hủy</button>
+        <div class="actions"><button type="button" class="action cancel-action" id="cancel" disabled>${icon("close")} Hủy</button>
         <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng loa</button></div>
         <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><div class="status-copy"><strong id="statusText" class="status-content">Đang kết nối Home Assistant...</strong><small id="statusNote">Đang kiểm tra quyền truy cập và thiết bị.</small></div><span class="status-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
         <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro & cách khắc phục</summary>
