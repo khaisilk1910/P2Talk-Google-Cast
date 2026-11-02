@@ -12,6 +12,8 @@
 - **Giao diện sáng/tối tự thích ứng**, icon mới, trạng thái ghi âm/phát và sóng âm trực quan; **nhẹ và dễ kiểm tra lỗi:** chỉ chuyển đổi âm thanh bằng FFmpeg khi cần; hỗ trợ log và diagnostics.
 - **Cấu hình bằng giao diện:** cài qua HACS/Marketplace, sử dụng trong panel của Home Assistant.
 
+**Giao diện chạy thực tế:** [Theme sáng](docs/ui-light.png) · [Theme tối](docs/ui-dark.png) · [Điện thoại](docs/ui-mobile.png)
+
 ## Cài đặt
 
 **Yêu cầu:** Home Assistant **2026.7+**, HACS hoặc Marketplace tương thích, tích hợp Google Cast và loa `media_player` đã hoạt động, FFmpeg khả dụng trong môi trường Home Assistant Core.

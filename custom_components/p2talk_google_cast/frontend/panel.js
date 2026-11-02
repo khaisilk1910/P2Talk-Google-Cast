@@ -33,8 +33,6 @@ const glyphs = {
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 11v6m0-10h.01"/>',
   lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
   wifi: '<path d="M2 8.8a15 15 0 0 1 20 0M5 12a10.5 10.5 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0M12 19.5h.01"/>',
-  bolt: '<path d="m13 2-9 12h7l-1 8 10-12h-7l0-8Z"/>',
-  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 };
 function icon(name, className = "") {
   return `<svg class="svg-icon ${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${glyphs[name]}</svg>`;
@@ -138,9 +136,256 @@ h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; mar
 @media (max-width:520px) { .surface { border-radius:23px; padding:19px 16px; } .symbol { width:52px; height:52px; border-radius:16px; } .mark-icon { width:38px; height:38px; } .lan-pill { padding:6px 8px; font-size:10px; } .wave { width:42px; gap:3px; } .wave span { width:3px; } .wave span:nth-child(n+6) { display:none; } .mic-orbit { width:187px; height:187px; } .mic { width:156px; height:156px; } .mic-layout { gap:0; } }
 @media (max-width:350px) { .lan-pill { display:none; } .wave { display:none; } .mic-layout { margin-inline:auto; } .head { gap:9px; } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
+/* P2Talk Studio UI: functional recreation of the approved visual design.
+   No runtime image/CDN/font requests; decorative media comes from local HA assets. */
+:host {
+  --pt-brand:#1275f7; --pt-cyan:#00c5f9; --pt-violet:#8c6aff;
+  --pt-primary:var(--primary-color,#167dfa);
+  --pt-border:color-mix(in srgb,var(--divider-color,#d6e0ef) 74%,#b1c5e7 26%);
+  --pt-hero-ink:#123363;
+}
+.wrap { padding:clamp(12px,2.8vw,28px) 12px max(22px,env(safe-area-inset-bottom)); }
+.surface { width:min(100%,620px); padding:0; border-radius:28px;
+  background:linear-gradient(162deg,color-mix(in srgb,var(--pt-card) 91%,#c7d9ff 9%),var(--pt-card) 72%);
+  border:1px solid color-mix(in srgb,var(--pt-border) 75%,#91c3fd 25%);
+  box-shadow:0 22px 56px rgba(38,69,124,.18),0 5px 13px rgba(29,80,136,.10);
+}
+.surface::before { display:none; }
+.head { position:relative; display:flex; align-items:center; gap:14px; height:174px; padding:22px 23px 31px; margin:0; overflow:hidden;
+  border:0; color:var(--pt-hero-ink);
+  background:linear-gradient(115deg,#a9d9ff 0%,#d4e9ff 42%,#7ebdfd 78%,#247ad8 100%);
+}
+.hero-glow { position:absolute; pointer-events:none; inset:0; background:
+  radial-gradient(circle at 10% 20%,rgba(255,255,255,.85),transparent 30%),
+  radial-gradient(ellipse at 56% 112%,rgba(255,255,255,.8),transparent 54%),
+  radial-gradient(circle at 100% 2%,rgba(4,86,204,.26),transparent 38%); }
+.hero-waves { position:absolute; pointer-events:none; width:100%; height:115px; left:0; bottom:-1px; opacity:.95; }
+.hero-speaker { position:absolute; width:190px; height:auto; right:-9px; bottom:0px; pointer-events:none;
+  filter:drop-shadow(0 5px 8px rgba(16,55,109,.25)); opacity:.98; }
+.head .symbol { z-index:1; width:96px; height:96px; border:2px solid rgba(255,255,255,.74); border-radius:50%; flex:none;
+ background:radial-gradient(circle at 30% 16%,#34e3ff 0%,#087cf1 55%,#0757ed 77%,#7d5ff1 100%);
+ box-shadow:0 0 0 5px rgba(255,255,255,.2),0 8px 19px rgba(6,75,178,.38),inset 0 2px 7px rgba(255,255,255,.66); }
+.head .symbol .mark-icon { width:72px; height:72px; filter:drop-shadow(0 3px 2px rgba(4,44,137,.27)); }
+.heading { position:relative; z-index:1; align-self:center; min-width:0; flex:1; margin-right:70px; }
+.heading h1 { font-size:clamp(19px,3.6vw,25px); letter-spacing:-.75px; line-height:1.2; font-weight:850; white-space:nowrap; color:#173159; text-shadow:0 1px 0 rgba(255,255,255,.25); }
+.heading h1 em { font-style:normal; color:#0057cc; }
+.heading .subtitle { font-size:12px; color:#244977; margin:9px 0 0; line-height:1.45; font-weight:530; max-width:330px; }
+.lan-pill { position:absolute; top:13px; right:13px; z-index:3; padding:5px 10px;
+ color:#087042; background:linear-gradient(135deg,#d9ffe8,#8cecb5); border:1px solid #6ddfaf;
+ box-shadow:0 2px 8px rgba(17,98,76,.12); font-size:11px; }
+.lan-pill .dot { width:7px; height:7px; box-shadow:0 0 0 2px rgba(0,143,84,.1); }
+.lan-pill.unavailable { background:#fff3db; color:#a34b13; border-color:#f6bd63; }
+.lan-pill.busy { background:#eff6ff; color:#0e68c8; border-color:#92c6f8; }
+.panel-body { position:relative; margin-top:-14px; border-radius:26px 26px 0 0;
+  padding:25px 25px 16px; background:linear-gradient(180deg,
+  color-mix(in srgb,var(--pt-card) 81%,#d1dcff 19%) 0%,
+  color-mix(in srgb,var(--pt-card) 92%,#e3ebff 8%) 52%,var(--pt-card) 100%);
+  box-shadow:0 -4px 10px rgba(107,157,217,.08); }
+.section { margin-bottom:17px; }
+.section-top { margin-bottom:9px; }
+.section-title { font-size:14px; font-weight:820; gap:10px; }
+.section-title .svg-icon { width:24px; height:24px; color:#0864e9; fill:#0864e9; stroke-width:1.7; }
+.section-tools { display:flex; align-items:center; gap:5px; }
+.refresh-icon { display:grid; place-items:center; width:31px; height:31px; border:0; border-radius:50%; background:transparent; color:#1173df; cursor:pointer; }
+.refresh-icon:hover:not(:disabled) { background:color-mix(in srgb,var(--pt-primary) 12%,transparent); }
+.refresh-icon:disabled { opacity:.4; cursor:wait; }
+.refresh-icon .svg-icon { width:17px; height:17px; }
+.configure-link { padding:7px 11px; border:1px solid #66a7fa; border-radius:999px;
+  background:color-mix(in srgb,var(--pt-card) 86%,#d8ebff 14%); color:#095fd0;
+  box-shadow:0 2px 7px rgba(28,104,226,.08); font-size:12px; }
+.configure-link:hover { border-color:#1982fb; background:color-mix(in srgb,var(--pt-card) 76%,#c6e6ff 24%); }
+.select-wrap { min-height:58px; border:1px solid color-mix(in srgb,var(--pt-border) 80%,white 20%); border-radius:17px;
+  background:color-mix(in srgb,var(--pt-card) 92%,#ecf4ff 8%);
+  box-shadow:0 3px 9px rgba(35,60,103,.11),inset 0 1px 0 rgba(255,255,255,.55); }
+.select-wrap .device-icon { width:54px; height:48px; margin-inline-start:5px; background:transparent; }
+.nest-mini { display:block; position:relative; width:39px; height:23px; border-radius:50% 50% 42% 42%; transform:perspective(100px) rotateX(6deg);
+  background:radial-gradient(ellipse at 30% 10%,#e8e9ea 0%,#9da5b0 40%,#606b7a 73%,#27344a 100%);
+  box-shadow:0 5px 5px rgba(20,45,76,.21),inset 0 -4px 3px rgba(0,0,0,.19); }
+.nest-mini::after { content:""; position:absolute; inset:auto 3px 1px; height:2px; border-radius:50%; background:linear-gradient(90deg,transparent,#4ecaff,transparent); }
+.select-wrap select { height:58px; padding:12px 148px 12px 4px; font-size:14px; font-weight:800; }
+.select-chevron { width:20px; height:20px; right:12px; color:#244870; }
+.speaker-availability { position:absolute; right:41px; top:50%; display:flex; gap:7px; align-items:center;
+ transform:translateY(-50%); font-size:11px; color:var(--pt-muted); pointer-events:none; white-space:nowrap; }
+.speaker-availability .state-dot { width:8px; height:8px; border-radius:50%; background:#9cabc1; }
+.speaker-availability.online .state-dot { background:#00c65d; box-shadow:0 0 0 3px rgba(7,210,109,.09); }
+.speaker-availability.offline .state-dot { background:#f45d63; }
+.speaker-meta { height:0; opacity:0; padding:0; overflow:hidden; }
+.volume-section { margin-top:10px; margin-bottom:8px; }
+.volume-box { border-radius:15px; border:1px solid color-mix(in srgb,var(--pt-border) 73%,#cad6f1 27%);
+  background:color-mix(in srgb,var(--pt-card) 87%,#d5e5ff 13%); min-height:51px; padding:7px 10px 7px 14px; gap:12px; }
+.volume-box .svg-icon { color:#1268c9; width:21px; height:21px; }
+.volume-box .volume-max { width:22px; height:22px; }
+.volume-box input { height:8px; background:linear-gradient(90deg,#1172fa 0%,#00b8f8 var(--progress,65%),color-mix(in srgb,var(--pt-border) 76%,#b8c6e5 24%) var(--progress,65%)); }
+.volume-box input::-webkit-slider-thumb { width:21px; height:21px; background:linear-gradient(135deg,#008bff,#0873e2); border:1px solid #5bcaff; box-shadow:0 2px 5px rgba(29,85,199,.22); }
+.volume-box input::-moz-range-thumb { width:21px; height:21px; background:linear-gradient(135deg,#008bff,#0873e2); border:1px solid #5bcaff; }
+.volume-box output { min-width:51px; padding:8px 10px; border-radius:14px; font-size:14px; color:#064cb7; background:linear-gradient(135deg,#dbecff,#b5d7ff); }
+.stage { margin:0 -25px 1px; padding:8px 12px 5px; isolation:isolate; overflow:visible;
+  background:radial-gradient(ellipse at 50% 48%,rgba(49,169,255,.19),transparent 63%),
+             radial-gradient(ellipse at 87% 55%,rgba(151,109,255,.14),transparent 46%); }
+.stage::before { z-index:-1; top:13px; width:min(100%,550px); height:275px;
+  background:radial-gradient(ellipse at 50% 54%,rgba(3,145,253,.24),transparent 64%); }
+.stage-kicker { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.mic-layout { padding:6px 0 0; gap:0; min-height:238px; }
+.wave { z-index:1; flex:1 1 0; min-width:0; width:auto; height:124px; gap:4px; opacity:.78; overflow:visible; }
+.wave span { width:4px; height:var(--h); max-height:100%; flex:1 1 3px;
+  background:linear-gradient(180deg,#8ceaff 0%,#1baafa 46%,#a070f9 100%); transform:scaleY(.7);
+  box-shadow:0 0 7px rgba(46,183,252,.13); }
+.mic-orbit { width:230px; height:230px; }
+.mic-orbit::before { inset:6px; border:3px solid rgba(128,244,255,.55); box-shadow:0 0 24px rgba(57,202,255,.21),inset 0 0 19px rgba(68,176,255,.12); }
+.mic-orbit::after { inset:0; border:2px solid rgba(135,164,255,.35); }
+.mic { width:195px; height:195px; padding:15px; border:4px solid rgba(238,255,255,.96);
+  background:radial-gradient(circle at 65% 24%,#1cccf6 0%,#087bfb 48%,#0860ee 79%,#4d49e6 100%);
+  box-shadow:0 10px 28px rgba(10,93,233,.31),0 0 23px rgba(76,191,255,.42),inset 0 3px 7px rgba(255,255,255,.38),inset 0 -12px 24px rgba(20,50,192,.26); }
+.mic .svg-icon { width:68px; height:68px; stroke-width:1.6; }
+.mic span { font-size:18px; line-height:1.22; font-weight:790; letter-spacing:-.3px; text-shadow:0 1px 4px rgba(2,57,149,.2); }
+.mic:hover:not(:disabled) { transform:scale(1.025); box-shadow:0 13px 37px rgba(10,93,233,.37),0 0 26px rgba(76,191,255,.52); }
+.stage.recording .mic { background:radial-gradient(circle at 20% 18%,#ffb18b,#fc575e 52%,#ce2d86); }
+.stage.sending .mic { filter:grayscale(.22); }
+.hint { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.counter { min-height:0; font-weight:700; color:var(--pt-muted); font-size:12px; margin:-2px 0 5px; }
+.stage:not(.recording):not(.sending) .counter { visibility:hidden; height:0; margin:0; }
+.actions { gap:11px; margin:7px 0 0; }
+.action { border-radius:999px; min-height:48px; padding:12px 10px; font-size:14px;
+  background:linear-gradient(150deg,color-mix(in srgb,var(--pt-card) 72%,#dbe1f6 28%),color-mix(in srgb,var(--pt-card) 80%,#d8dbed 20%));
+  border:1px solid color-mix(in srgb,var(--pt-border) 65%,#d2d9e9 35%); }
+.action.stop-action { background:linear-gradient(110deg,#0677ef,#3988e9); border:1px solid #61c8ff; color:#fff; box-shadow:inset 0 1px 1px rgba(255,255,255,.25); }
+.action.stop-action:hover:not(:disabled) { background:linear-gradient(110deg,#006bda,#2584f7); }
+.action .svg-icon { width:17px; height:17px; }
+.action:disabled { opacity:.57; }
+.action.stop-action:disabled { opacity:.9; }
+.status { position:relative; min-height:69px; margin-top:14px; border:1px solid #a0e0b4; border-radius:15px;
+  padding:13px 15px; background:linear-gradient(100deg,#c8f8da,#c5f1e8 68%,#b9eddb);
+  color:#174f33; align-items:center; gap:12px; }
+.status .status-symbol { width:37px; height:37px; border-radius:50%; background:linear-gradient(140deg,#07935d,#00794b); color:white; flex:none; }
+.status .status-symbol .svg-icon { width:23px; height:23px; stroke-width:2.8; }
+.status-copy { display:flex; flex:1; flex-direction:column; gap:3px; min-width:0; }
+.status .status-content { font-size:13px; font-weight:800; line-height:1.32; color:#124b2f; }
+.status small { font-size:11px; line-height:1.35; color:#376957; }
+.status-equalizer { display:flex; align-items:end; height:32px; gap:4px; flex:none; margin-right:2px; opacity:.52; }
+.status-equalizer i { display:block; width:5px; height:6px; border-radius:4px; background:#25bd82; }
+.status-equalizer i:nth-child(2),.status-equalizer i:nth-child(6) { height:12px; }
+.status-equalizer i:nth-child(3),.status-equalizer i:nth-child(5) { height:20px; }
+.status-equalizer i:nth-child(4) { height:28px; }
+.status.success { color:#134f34; border-color:#95deb1; background:linear-gradient(110deg,#c8f8da,#baf0da); }
+.status.success .status-symbol { background:linear-gradient(140deg,#009e62,#006b49); color:#fff; }
+.status.loading { background:linear-gradient(110deg,#dcf0ff,#dcf6ff); border-color:#a5d6ff; }
+.status.loading .status-symbol { background:linear-gradient(140deg,#1471e7,#00b0f3); color:#fff; }
+.status.loading .status-content { color:#184f88; }
+.status.loading small { color:#54718e; }
+.status.error { background:linear-gradient(115deg,#ffebec,#fff3f4); color:#a32140; border-color:#f7b8c6; }
+.status.error .status-symbol { color:#fff; background:linear-gradient(140deg,#eb4568,#b82752); }
+.status.error .status-content { color:#9a2445; }
+.status.error small { color:#9e5064; }
+.status.recording .status-equalizer i,.stage.recording ~ .status .status-equalizer i { animation:equalize .7s ease-in-out infinite alternate; }
+.metrics { margin-top:10px; border-radius:10px; }
+.foot { margin-top:13px; border-top:0; justify-content:center; font-size:10px; gap:6px; padding:0 0 2px; }
+.foot .foot-brand { display:none; }
+:host([data-dark="true"]) .surface { box-shadow:0 22px 56px rgba(0,0,0,.3); }
+:host([data-dark="true"]) .head { background:linear-gradient(115deg,#173e76,#225da0 47%,#172e62 100%); }
+:host([data-dark="true"]) .hero-glow { opacity:.4; }
+:host([data-dark="true"]) .heading h1 { color:#f1f7ff; text-shadow:0 1px 2px rgba(0,0,0,.25); }
+:host([data-dark="true"]) .heading h1 em { color:#79cbff; }
+:host([data-dark="true"]) .heading .subtitle { color:#e0efff; }
+:host([data-dark="true"]) .hero-speaker { opacity:.77; }
+:host([data-dark="true"]) .hero-waves { opacity:.42; }
+:host([data-dark="true"]) .panel-body { background:linear-gradient(180deg,color-mix(in srgb,var(--pt-card) 80%,#1b3d70 20%) 0%,var(--pt-card) 100%); }
+:host([data-dark="true"]) .select-wrap { background:color-mix(in srgb,var(--pt-card) 95%,#254b7f 5%); box-shadow:0 3px 9px rgba(0,0,0,.19); }
+:host([data-dark="true"]) .section-title .svg-icon { color:#63b9ff; fill:#5daffa; }
+:host([data-dark="true"]) .configure-link { color:#8bceff; border-color:#458cd3; }
+:host([data-dark="true"]) .volume-box { background:color-mix(in srgb,var(--pt-card) 89%,#254b7f 11%); }
+:host([data-dark="true"]) .volume-box .svg-icon { color:#8bcfff; }
+:host([data-dark="true"]) .volume-box output { color:#a3d2ff; background:color-mix(in srgb,var(--pt-card) 72%,#3b79cc 28%); }
+:host([data-dark="true"]) .select-chevron { color:var(--pt-muted); }
+:host([data-dark="true"]) .status.success { background:linear-gradient(110deg,#154b40,#1d5b52); border-color:#238f72; }
+:host([data-dark="true"]) .status.success .status-content { color:#d4ffe7; }
+:host([data-dark="true"]) .status.success small { color:#a2e2ca; }
+:host([data-dark="true"]) .status.loading { background:#163b56; border-color:#265e91; }
+:host([data-dark="true"]) .status.loading .status-content { color:#d5edff; }
+:host([data-dark="true"]) .status.loading small { color:#a1cce9; }
+:host([data-dark="true"]) .status.error { background:#512737; border-color:#9b4b5a; }
+:host([data-dark="true"]) .status.error .status-content { color:#ffe0e5; }
+:host([data-dark="true"]) .status.error small { color:#ffd1dc; }
+@media (max-width:620px) {
+ .head { height:148px; padding:24px 16px 28px; gap:12px; }
+ .head .symbol { width:78px; height:78px; }
+ .head .symbol .mark-icon { width:60px; height:60px; }
+ .heading { margin-right:48px; }
+ .heading h1 { font-size:clamp(15px,3.8vw,22px); }
+ .heading .subtitle { font-size:11px; }
+ .hero-speaker { width:151px; right:-15px; bottom:0; }
+ .panel-body { padding:20px 18px 15px; }
+ .stage { margin-left:-18px; margin-right:-18px; }
+ .mic-layout { min-height:219px; }
+ .mic-orbit { width:215px; height:215px; }
+ .mic { width:183px; height:183px; }
+ .wave { gap:3px; width:auto; }
+ .wave span { width:3px; }
+}
+@media (max-width:430px) {
+ .surface { border-radius:22px; }
+ .head { height:137px; padding:21px 13px 22px; gap:9px; }
+ .head .symbol { width:65px; height:65px; }
+ .head .symbol .mark-icon { width:50px; height:50px; }
+ .heading { margin-right:38px; }
+ .heading h1 { font-size:clamp(14px,3.85vw,17px); white-space:normal; }
+ .heading .subtitle { font-size:10px; line-height:1.33; max-width:205px; }
+ .hero-desktop-break { display:none; }
+ .hero-speaker { width:116px; opacity:.82; right:-29px; }
+ .lan-pill { top:7px; right:7px; padding:4px 7px; font-size:9px; }
+ .panel-body { padding:18px 12px 13px; border-radius:20px 20px 0 0; }
+ .section-title { font-size:12px; gap:6px; }
+ .section-title .svg-icon { width:20px; height:20px; }
+ .configure-link { font-size:10px; padding:5px 7px; }
+ .refresh-icon { width:27px; }
+ .section { margin-bottom:15px; }
+ .select-wrap { min-height:52px; }
+ .select-wrap select { height:52px; font-size:12px; padding:10px 105px 10px 0; }
+ .select-wrap .device-icon { width:44px; }
+ .nest-mini { width:33px; height:19px; }
+ .speaker-availability { right:33px; font-size:9px; }
+ .select-chevron { right:9px; width:15px; }
+ .volume-box { gap:7px; padding:7px 8px; }
+ .volume-box output { min-width:43px; font-size:12px; padding:7px; }
+ .volume-box .svg-icon { width:17px; }
+ .volume-box .volume-max { width:17px; }
+ .stage { margin-left:-12px; margin-right:-12px; }
+ .mic-layout { min-height:205px; }
+ .mic-orbit { width:205px; height:205px; }
+ .mic { width:171px; height:171px; }
+ .mic .svg-icon { width:59px; height:59px; }
+ .mic span { font-size:16px; }
+ .wave { gap:2px; height:112px; }
+ .wave span { width:2px; flex:0 0 3px; }
+ .wave span:nth-child(even) { display:none; }
+ .action { min-height:44px; font-size:12px; padding:10px 6px; }
+ .status { padding:11px 10px; gap:8px; }
+ .status .status-content { font-size:11px; }
+ .status small { font-size:10px; }
+ .status-symbol { width:31px; height:31px; }
+ .status-equalizer { gap:2px; }
+ .status-equalizer i { width:3px; }
+ .foot { display:none; }
+}
+@media (max-width:350px) {
+ .heading .subtitle { display:none; }
+ .head .symbol { width:59px; height:59px; }
+ .heading { margin-right:0; }
+ .hero-speaker { width:105px; opacity:.5; }
+ .wave { display:flex; }
+ .mic-orbit { width:185px; height:185px; }
+ .mic { width:159px; height:159px; }
+ .mic-layout { min-height:190px; }
+ .status-equalizer { display:none; }
+ .speaker-availability { display:none; }
+ .select-wrap select { padding-right:24px; }
+}
+@media (prefers-reduced-motion:reduce) {
+ .wave span,.mic,.mic-orbit::before,.mic-orbit::after { animation:none!important; transition:none!important; }
+}
+
 `;
 
-const waveMarkup = () => `<div class="wave" aria-hidden="true">${[16,28,43,64,34,48,27,17,12].map((n,i)=>`<span style="--h:${n}px;--delay:${(i*.11).toFixed(2)}s"></span>`).join("")}</div>`;
+const waveMarkup = () => `<div class="wave" aria-hidden="true">${[14,27,44,67,35,57,84,48,62,37,75,102,65,46,58,31,18].map((n,i)=>`<span style="--h:${n}px;--delay:${(i*.07).toFixed(2)}s"></span>`).join("")}</div>`;
 
 class P2TalkGoogleCastPanel extends HTMLElement {
   constructor() {
@@ -165,6 +410,9 @@ class P2TalkGoogleCastPanel extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (typeof hass?.themes?.darkMode === "boolean") {
+      this.setAttribute("data-dark", hass.themes.darkMode ? "true" : "false");
+    }
     if (this.isConnected && !this._loaded) this._loadSpeakers();
     else if (this.isConnected && this._loaded) this._syncSpeakerState();
   }
@@ -175,29 +423,34 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       <style>${styles}</style>
       <div class="wrap"><main class="surface">
         <header class="head">
+          <div class="hero-glow" aria-hidden="true"></div>
+          <svg class="hero-waves" viewBox="0 0 680 170" preserveAspectRatio="none" aria-hidden="true"><path d="M0 110C116 190 214 92 333 139S522 104 680 149V170H0Z" fill="#e8f6ff" opacity=".37"/><path d="M0 128C158 200 237 103 364 154S554 83 680 132V170H0Z" fill="#38baf5" opacity=".27"/><path d="M0 155C158 112 234 163 327 143S531 179 680 118V170H0Z" fill="#0797ea" opacity=".36"/></svg>
+          <img class="hero-speaker" src="/${DOMAIN}_assets/nest-speaker.webp" alt="" aria-hidden="true" loading="eager" decoding="async" />
           <div class="symbol">${mark}</div>
-          <div class="heading"><p class="eyebrow">GIỌNG NÓI · GOOGLE CAST</p><h1>P2Talk Google Cast</h1><p class="subtitle">Nhấn giữ để nói · Thả để phát lên loa</p></div>
-          <span class="lan-pill"><span class="dot"></span>LAN</span>
+          <div class="heading"><h1>P2Talk <em>Google Cast</em></h1><p class="subtitle">Nhấn giữ để nói, thả để phát giọng nói<br class="hero-desktop-break"/> lên loa Google Cast ngay trong Home Assistant</p></div>
+          <span class="lan-pill" id="connectionPill"><span class="dot"></span><span id="connectionLabel">Đang kết nối</span></span>
         </header>
-        <section class="section" aria-label="Thiết bị phát">
-          <div class="section-top"><label class="section-title" for="speaker">${icon("speaker")} Chọn loa Google Cast</label>
-            <a class="small-link" id="configure" href="/config/integrations/integration/p2talk_google_cast" title="Cấu hình, thêm, sửa hoặc xóa loa">${icon("settings")} Quản lý loa</a></div>
-          <div class="select-wrap"><span class="device-icon">${icon("speaker")}</span><select id="speaker" aria-label="Chọn loa được thêm trong cấu hình"><option value="">Đang tải loa...</option></select>${icon("chevron","select-chevron")}</div>
-          <div class="speaker-meta" id="speakerMeta"><span class="state-dot"></span><span id="speakerState">Đang kiểm tra thiết bị...</span><button type="button" class="small-link" id="refresh" title="Cập nhật danh sách loa">${icon("refresh")} Làm mới</button></div>
+        <div class="panel-body">
+        <section class="section speaker-section" aria-label="Thiết bị phát">
+          <div class="section-top"><label class="section-title" for="speaker">${icon("volume")} Chọn loa Google Cast</label>
+          <span class="section-tools"><button type="button" class="refresh-icon" id="refresh" title="Làm mới danh sách loa" aria-label="Làm mới danh sách loa">${icon("refresh")}</button><a class="small-link configure-link" id="configure" href="/config/integrations/integration/p2talk_google_cast" title="Cấu hình, thêm, sửa hoặc xóa loa">${icon("settings")} Quản lý loa</a></span></div>
+          <div class="select-wrap"><span class="device-icon" aria-hidden="true"><span class="nest-mini"></span></span><select id="speaker" aria-label="Chọn loa đã thêm trong cấu hình"><option value="">Đang tải loa...</option></select><span class="speaker-availability" id="inlineState" aria-hidden="true"><i class="state-dot"></i><span id="inlineStateText">Đang tải</span></span>${icon("chevron","select-chevron")}</div>
+          <div class="speaker-meta" id="speakerMeta"><span class="state-dot"></span><span id="speakerState">Đang kiểm tra thiết bị...</span></div>
         </section>
-        <section class="section" aria-label="Âm lượng phát"><div class="section-top"><label for="volume" class="section-title">${icon("volume")} Âm lượng phát</label></div>
-          <div class="volume-box">${icon("volume")}<input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng phát" style="--progress:65%"/><output id="volumeText" for="volume">65%</output></div>
+        <section class="section volume-section" aria-label="Âm lượng phát"><div class="section-top"><label for="volume" class="section-title">${icon("volume")} Âm lượng phát</label></div>
+          <div class="volume-box">${icon("volume")}<input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng phát" style="--progress:65%"/>${icon("volume", "volume-max")}<output id="volumeText" for="volume">65%</output></div>
         </section>
         <section class="stage" id="stage" aria-label="Nhấn giữ để nói">
           <div class="stage-kicker">${icon("wifi")} Kết nối nội bộ qua Home Assistant</div>
-          <div class="mic-layout">${waveMarkup()}<div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span>NHẤN GIỮ</span></button></div>${waveMarkup()}</div>
+          <div class="mic-layout">${waveMarkup()}<div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br/>để nói</span></button></div>${waveMarkup()}</div>
           <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát đến loa đã chọn</div>
         </section>
-        <div class="actions"><button type="button" class="action" id="cancel" disabled>${icon("close")} Hủy ghi âm</button>
+        <div class="actions"><button type="button" class="action" id="cancel" disabled>${icon("close")} Hủy</button>
         <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng loa</button></div>
-        <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><span id="statusText" class="status-content">Đang kết nối Home Assistant...</span></div>
+        <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><div class="status-copy"><strong id="statusText" class="status-content">Đang kết nối Home Assistant...</strong><small id="statusNote">Đang kiểm tra quyền truy cập và thiết bị.</small></div><span class="status-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
         <div id="metrics" class="metrics" aria-live="polite"></div>
-        <footer class="foot"><span class="privacy">${icon("lock")} Âm thanh qua Home Assistant đã đăng nhập · Không cần token</span><span class="foot-brand">P2Talk · Google Cast</span></footer>
+        <footer class="foot"><span class="privacy">${icon("lock")} Âm thanh qua phiên Home Assistant đã đăng nhập · Không cần token</span><span class="foot-brand">P2Talk · Google Cast</span></footer>
+        </div>
       </main></div>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.$("refresh").addEventListener("click", () => this._loadSpeakers());
@@ -265,12 +518,22 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     if (!el) return;
     this.$("statusText").textContent = message;
     this.$("statusIcon").innerHTML = icon(type === "success" ? "check" : type === "error" ? "alert" : type === "loading" ? "refresh" : "info");
+    const secondary = this.$("statusNote");
+    secondary.textContent = type === "success" ? "Âm thanh được gửi qua phiên Home Assistant đã đăng nhập." : type === "error" ? "Kiểm tra kết nối thiết bị và Settings → System → Logs." : type === "loading" ? "Đang xử lý yêu cầu của bạn..." : "Chọn loa và nhấn giữ nút micro để nói.";
+    const pill = this.$("connectionPill");
+    if (pill) {
+      pill.className = `lan-pill ${type === "error" ? "unavailable" : type === "loading" ? "busy" : ""}`;
+      this.$("connectionLabel").textContent = type === "error" ? "Cần kiểm tra" : type === "loading" ? "Đang xử lý" : "Đã sẵn sàng";
+    }
     el.className = `status ${type}`;
   }
 
   _refreshControls() {
     if (!this.$) return;
-    const selected = !!this.$("speaker").value;
+    const entityId = this.$("speaker").value;
+    const speaker = this._configuredSpeakers.find((entry) => entry.entity_id === entityId);
+    const state = this._hass?.states?.[entityId]?.state || speaker?.state;
+    const selected = !!speaker?.is_available && state !== "unknown" && state !== "unavailable";
     this.$("mic").disabled = this._recording || this._sending || !selected;
     // While recording, keep the same pressed button operable for pointerup.
     if (this._recording) this.$("mic").disabled = false;
@@ -348,6 +611,12 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     const cls = !selected ? "speaker-meta" : `speaker-meta ${online ? "online" : "offline"}`;
     if (meta.className !== cls) meta.className = cls;
     if (this.$("speakerState").textContent !== text) this.$("speakerState").textContent = text;
+    const inline = this.$("inlineState");
+    if (inline) {
+      inline.className = `speaker-availability ${selected ? (online ? "online" : "offline") : ""}`;
+      this.$("inlineStateText").textContent = !selected ? "Chọn loa" : online ? "Đang online" : "Offline";
+    }
+    this._refreshControls();
   }
 
   _stopTracks() {
@@ -380,6 +649,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._started = Date.now();
       this.$("stage").classList.add("recording");
       this.$("hint").textContent = "ĐANG GHI ÂM — THẢ ĐỂ PHÁT";
+      this.$("micText").innerHTML = "Đang ghi âm<br>Thả để phát";
       this._status("Đang thu âm giọng nói...", "loading");
       this._timer = setInterval(() => {
         const seconds = Math.floor((Date.now() - this._started) / 1000);
@@ -404,6 +674,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this.$("stage").classList.remove("recording");
     if (!cancel) this.$("stage").classList.add("sending");
     this.$("hint").textContent = cancel ? "Đã hủy" : "ĐANG GỬI ĐẾN LOA...";
+    this.$("micText").innerHTML = cancel ? "Nhấn giữ<br>để nói" : "Đang gửi<br>âm thanh";
     if (!cancel) this._status("Đang chuyển và gửi âm thanh đến loa...", "loading");
     this._refreshControls();
     if (cancel) this._status("Đã hủy bản ghi âm.");
@@ -417,6 +688,8 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._chunks = [];
       this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
+      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
+      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
       this.$("counter").textContent = "Thả nút để phát đến loa đã chọn";
       this._refreshControls();
       return;
@@ -428,6 +701,8 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._status("Bản ghi âm quá lớn. Hãy ghi ngắn hơn.", "error");
       this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
+      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
+      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
       return;
     }
     this._sending = true;
@@ -473,6 +748,8 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._sending = false;
       this.$("stage").classList.remove("sending");
       this.$("hint").textContent = "Nhấn giữ để nói";
+      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
+      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
       this.$("counter").textContent = "Thả nút để phát đến loa đã chọn";
       this._refreshControls();
     }

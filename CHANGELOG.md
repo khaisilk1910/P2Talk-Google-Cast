@@ -1,6 +1,14 @@
 # Changelog — P2Talk Google Cast
 
+## Unreleased — Live Concept UI
+
+- Thay giao diện panel chạy thật bằng bố cục sát ảnh concept đã duyệt: banner xanh có hình loa Cast, logo micro tròn, thông báo sẵn sàng, chọn loa kèm trạng thái online, slider và nút micro có sóng âm lớn.
+- Tự thay palette theo `hass.themes.darkMode`, có giao diện sáng/tối và breakpoint 320px; asset speaker WebP nội bộ dưới 10 KB, không tải ảnh ngoài Internet.
+- Giữ nguyên WebSocket, quản lý loa, ghi âm/hủy/dừng, upload, log và giới hạn tài nguyên; không có bốn ô giới thiệu hay animation liên tục khi chờ.
+
 ## Unreleased — UI Redesign
+
+- Giữ giao diện tập trung vào điều khiển: không hiển thị bốn ô giới thiệu Truyền nhanh / Bảo mật / Tiết kiệm tài nguyên / Tương thích tốt; dọn icon không sử dụng và thêm kiểm thử chống tái xuất hiện.
 
 - Thiết kế lại panel cho theme sáng/tối với SVG icons, micro gradient, sóng âm, trạng thái ghi âm/gửi dữ liệu và khả năng truy cập tốt hơn.
 - Bổ sung icon thương hiệu micro + Cast (PNG 256px/512px) trong `brand/`, phù hợp Home Assistant 2026.3+.

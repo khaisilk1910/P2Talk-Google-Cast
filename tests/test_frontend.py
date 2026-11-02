@@ -33,6 +33,33 @@ class FrontendAssetsTests(unittest.TestCase):
         self.assertIn('`${DOMAIN}/stop`', source)
         self.assertIn('/config/integrations/integration/p2talk_google_cast', source)
 
+    def test_no_promotional_feature_tiles(self):
+        """Keep the panel focused on speaker selection and Push-to-Talk."""
+        source = (COMPONENT / 'frontend' / 'panel.js').read_text()
+        for label in ('Truyền nhanh', 'Bảo mật', 'Tiết kiệm tài nguyên', 'Tương thích tốt'):
+            with self.subTest(label=label):
+                self.assertNotIn(label, source)
+        self.assertNotIn('feature-grid', source)
+        self.assertNotIn('feature-card', source)
+        self.assertIn('<section class="stage"', source)
+        self.assertIn('<div class="actions">', source)
+
+    def test_concept_match_is_real_functional_ui(self):
+        """Decorative artwork must not replace live controls or require cloud assets."""
+        source = (COMPONENT / 'frontend' / 'panel.js').read_text()
+        asset = COMPONENT / 'frontend' / 'nest-speaker.webp'
+        self.assertTrue(asset.exists())
+        self.assertLess(asset.stat().st_size, 32 * 1024)
+        self.assertIn('nest-speaker.webp', source)
+        for identifier in ('id="speaker"', 'id="volume"', 'id="mic"',
+                           'id="cancel"', 'id="stop"', 'id="status"',
+                           'id="connectionPill"', 'id="inlineState"'):
+            with self.subTest(identifier=identifier):
+                self.assertIn(identifier, source)
+        self.assertIn('hass.themes.darkMode', source)
+        self.assertIn(':host([data-dark="true"])', source)
+        self.assertIn('waveMarkup()', source)
+
     def test_panel_asset_cache_is_busted_on_update(self):
         source = (COMPONENT / '__init__.py').read_text()
         self.assertIn('stat().st_mtime_ns', source)
