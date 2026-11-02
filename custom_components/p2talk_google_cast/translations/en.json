@@ -1,0 +1,21 @@
+{
+  "title": "P2Talk Google Cast",
+  "config": {
+    "step": {"user": {"title": "P2Talk Google Cast", "description": "Enable the P2Talk Google Cast panel in the Home Assistant sidebar. No token or extra port is needed."}},
+    "abort": {"already_configured": "P2Talk Google Cast is already configured."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "P2Talk Google Cast settings",
+        "data": {
+          "audio_bitrate": "MP3 bitrate",
+          "max_record_seconds": "Maximum recording length (seconds)",
+          "retention_hours": "Recording retention (hours)",
+          "default_volume": "Default speaker volume (0.05–1.0)",
+          "ffmpeg_path": "FFmpeg binary path"
+        }
+      }
+    }
+  }
+}

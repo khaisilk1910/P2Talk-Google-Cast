@@ -1,0 +1,33 @@
+name: Validate P2Talk Google Cast
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Python syntax
+        run: python -m compileall -q custom_components/p2talk_google_cast
+      - name: Check JS syntax
+        run: node --check custom_components/p2talk_google_cast/frontend/panel.js
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Validate HACS/Marketplace metadata
+        run: python -c 'import json; from pathlib import Path; p=Path("custom_components/p2talk_google_cast"); m=json.loads((p/"manifest.json").read_text()); h=json.loads(Path("hacs.json").read_text()); assert m["domain"]==p.name and m["name"]==h["name"] and m["config_flow"] is True'
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration

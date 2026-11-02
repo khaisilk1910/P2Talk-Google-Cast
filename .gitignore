@@ -1,0 +1,42 @@
+# Python / virtualenv
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Local Home Assistant storage (never commit tokens, recordings)
+.storage/
+.storage*/
+config/.storage/
+secrets.yaml
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.raw
+*.webm
+*.ogg
+*.mp3
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artefacts
+build/
+dist/
+*.egg-info/
+*.zip

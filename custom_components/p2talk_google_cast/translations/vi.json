@@ -1,0 +1,21 @@
+{
+  "title": "P2Talk Google Cast",
+  "config": {
+    "step": {"user": {"title": "P2Talk Google Cast", "description": "Bật bảng điều khiển P2Talk Google Cast trên thanh bên Home Assistant. Không cần token hay mở cổng riêng."}},
+    "abort": {"already_configured": "P2Talk Google Cast đã được cấu hình."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Cài đặt P2Talk Google Cast",
+        "data": {
+          "audio_bitrate": "Bitrate MP3",
+          "max_record_seconds": "Thời gian ghi âm tối đa (giây)",
+          "retention_hours": "Giữ tệp ghi âm (giờ)",
+          "default_volume": "Âm lượng mặc định (0.05–1.0)",
+          "ffmpeg_path": "Đường dẫn FFmpeg"
+        }
+      }
+    }
+  }
+}
