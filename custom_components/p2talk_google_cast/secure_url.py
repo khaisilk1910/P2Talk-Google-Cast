@@ -50,3 +50,16 @@ def configured_https_panel(hass) -> tuple[str | None, str]:
 def microphone_https_panel_url(hass) -> str | None:
     """Return the HTTPS P2Talk panel URL or None if HA has none configured."""
     return configured_https_panel(hass)[0]
+
+
+def configured_https_candidates(hass) -> list[str]:
+    """Validated HTTPS panel URLs, external first, deduplicated."""
+    result = []
+    for candidate in (getattr(hass.config, "external_url", None),
+                      getattr(hass.config, "internal_url", None)):
+        origin = secure_origin(candidate)
+        if origin:
+            panel = f"{origin}/{PANEL_PATH}"
+            if panel not in result:
+                result.append(panel)
+    return result

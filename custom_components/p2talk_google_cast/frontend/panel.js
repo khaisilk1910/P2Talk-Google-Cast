@@ -67,6 +67,21 @@ function safeHttpsPanelUrl(value) {
   } catch (_) { return null; }
 }
 
+/** Prefer an HA-managed HTTPS origin with the same hostname to avoid
+ * unnecessary cross-host navigation in Companion App WebViews. Never
+ * synthesize HTTPS from an untrusted HTTP host or probe arbitrary origins. */
+function selectHttpsPanelUrl(preferred, candidates) {
+  const fallback = safeHttpsPanelUrl(preferred);
+  const hostname = window.location?.hostname?.toLowerCase();
+  if (hostname && Array.isArray(candidates)) {
+    for (const candidate of candidates) {
+      const safe = safeHttpsPanelUrl(candidate);
+      if (safe && new URL(safe).hostname.toLowerCase() === hostname) return safe;
+    }
+  }
+  return fallback;
+}
+
 function microphoneAdvice(error, environment = microphoneEnvironment()) {
   const name = error?.name || "";
   if (!environment.getUserMedia && !environment.secure) {
@@ -921,13 +936,13 @@ class P2TalkGoogleCastPanel extends HTMLElement {
    * A secure iframe/background fetch cannot grant an HTTP document microphone access.
    * This runs ONLY on P2Talk panel load, reusing the authenticated speakers response.
    */
-  _autoRedirectToHttps(panelUrl) {
+  _autoRedirectToHttps(panelUrl, candidates = []) {
     // Redirect only when HTTP cannot provide microphone access. Localhost
     // may be a trusted HTTP context and should not be redirected unnecessarily.
     const microphoneAvailable = window.isSecureContext === true &&
       typeof navigator.mediaDevices?.getUserMedia === "function";
     if (window.location?.protocol !== "http:" || microphoneAvailable || !panelUrl) return false;
-    const target = safeHttpsPanelUrl(panelUrl);
+    const target = selectHttpsPanelUrl(panelUrl, candidates);
     if (!target) {
       this._status("URL HTTPS trong Home Assistant không hợp lệ.", "error",
         "Kiểm tra Settings → System → Network → Home Assistant URL. Chỉ dùng địa chỉ HTTPS hợp lệ.");
@@ -976,7 +991,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       // panel to HA's configured HTTPS URL immediately, not on first mic press.
       // No extra WS calls, preload tasks or navigation from other dashboards.
       this._loaded = true;
-      if (this._autoRedirectToHttps(response.mic_https_panel_url)) return;
+      if (this._autoRedirectToHttps(response.mic_https_panel_url, response.mic_https_candidates)) return;
       const insecure = !window.isSecureContext;
       const microphoneHelp = this.$("micHelp");
       microphoneHelp.hidden = !insecure;

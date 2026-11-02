@@ -32,7 +32,7 @@ from .const import (
     UPLOAD_TTL_SECONDS,
 )
 from .speakers import configured_speakers, speaker_by_id
-from .secure_url import configured_https_panel
+from .secure_url import configured_https_panel, configured_https_candidates
 
 _LOGGER = logging.getLogger(__name__)
 _REGISTERED_KEY = f"{DOMAIN}_ws_registered"
@@ -133,6 +133,7 @@ def ws_speakers(hass: HomeAssistant, connection, msg) -> None:
         "default_volume": runtime.entry.options.get(CONF_DEFAULT_VOLUME, DEFAULTS[CONF_DEFAULT_VOLUME]),
         "max_bytes": MAX_AUDIO_BYTES,
         "mic_https_configured": https_panel_url is not None,
+        "mic_https_candidates": configured_https_candidates(hass),
         "mic_https_panel_url": https_panel_url,  # validated Home Assistant-managed HTTPS panel URL
         "mic_https_state": https_source,  # external, internal, or missing
     })
