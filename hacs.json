@@ -1,5 +1,7 @@
 {
   "name": "P2Talk Google Cast",
   "render_readme": true,
-  "homeassistant": "2026.7.0"
+  "homeassistant": "2026.7.0",
+  "zip_release": false,
+  "hide_default_branch": true
 }

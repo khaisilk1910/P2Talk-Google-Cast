@@ -6,6 +6,7 @@
 
 const DOMAIN = "p2talk_google_cast";
 const CHUNK_BYTES = 48 * 1024;
+const UPLOAD_WINDOW = 6; // amortize Wi-Fi/WebSocket RTT while keeping ordering
 const STORAGE_PREFIX = "p2talk_google_cast_";
 
 const styles = `
@@ -59,10 +60,10 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._stream = null;
     this._chunks = [];
     this._maxSeconds = 120;
-    this._maxBytes = 12 * 1024 * 1024;
+    this._maxBytes = 8 * 1024 * 1024;
+    this._configuredSpeakers = [];
     this._timer = null;
     this._started = 0;
-    this._volumeInitialized = false;
   }
 
   set hass(hass) {
@@ -92,17 +93,19 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         <div class="actions"><button type="button" class="small" id="cancel" disabled>✕ Hủy</button>
         <button type="button" class="small" id="stop">■ Dừng loa</button></div>
         <div id="status" class="status" role="status" aria-live="polite">Đang kết nối Home Assistant...</div>
+        <div id="metrics" class="note" aria-live="polite"></div>
         <p class="note">Âm thanh được gửi qua kết nối Home Assistant đã đăng nhập.<br />Không cần API token hoặc cổng mạng riêng.</p>
       </main></div>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.$("refresh").addEventListener("click", () => this._loadSpeakers());
     this.$("speaker").addEventListener("change", (e) => {
       localStorage.setItem(`${STORAGE_PREFIX}speaker`, e.target.value);
+      this._applySpeakerVolume();
       this._refreshControls();
     });
     this.$("volume").addEventListener("input", (e) => {
       this.$("volumeText").textContent = `${e.target.value}%`;
-      localStorage.setItem(`${STORAGE_PREFIX}volume`, e.target.value);
+      // Volume overrides configuration only for this selected playback; not stored.
     });
     this.$("cancel").addEventListener("click", () => this._stopRecording(true));
     this.$("stop").addEventListener("click", () => this._stopSpeaker());
@@ -165,6 +168,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this.$("speaker").disabled = this._recording || this._sending;
     this.$("stop").disabled = this._sending || !selected;
     this.$("cancel").disabled = !this._recording;
+    this.$("refresh").disabled = this._recording || this._sending;
   }
 
   async _loadSpeakers(silent = false) {
@@ -176,31 +180,34 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._loaded = true;
       this._maxSeconds = response.max_seconds || 120;
       this._maxBytes = response.max_bytes || this._maxBytes;
-      if (!this._volumeInitialized) {
-        this._volumeInitialized = true;
-        const stored = localStorage.getItem(`${STORAGE_PREFIX}volume`);
-        const volume = stored === null ? Math.round((response.default_volume ?? 0.65) * 100) : Number(stored);
-        this.$("volume").value = String(Math.min(100, Math.max(5, volume)));
-        this.$("volumeText").textContent = `${this.$("volume").value}%`;
-      }
       const select = this.$("speaker");
       const previous = select.value || localStorage.getItem(`${STORAGE_PREFIX}speaker`);
       select.replaceChildren();
       const speakers = response.speakers || [];
+      this._configuredSpeakers = speakers;
       const empty = document.createElement("option");
       empty.value = "";
-      empty.textContent = speakers.length ? "Chọn loa..." : "Không tìm thấy loa hỗ trợ phát âm thanh";
+      empty.textContent = speakers.length ? "Chọn loa đã cấu hình..." : "Chưa thêm loa trong cấu hình tích hợp";
       select.append(empty);
       for (const speaker of speakers) {
         const option = document.createElement("option");
         option.value = speaker.entity_id;
-        option.textContent = `${speaker.is_cast ? "● " : ""}${speaker.friendly_name} (${speaker.state})`;
+        option.textContent = `${speaker.friendly_name} (${speaker.state})`;
         option.disabled = !speaker.is_available;
         select.append(option);
       }
       if (previous && speakers.some((s) => s.entity_id === previous && s.is_available)) select.value = previous;
+      if (!select.value) {
+        const firstOnline = speakers.find((s) => s.is_available);
+        if (firstOnline) select.value = firstOnline.entity_id;
+      }
+      if (!this._recording && !this._sending) this._applySpeakerVolume();
       if (!this._recording && !this._sending) {
-        this._status(speakers.length ? "Sẵn sàng. Chọn loa rồi nhấn giữ micro để nói." : "Chưa có loa hỗ trợ. Hãy thiết lập Google Cast trong Home Assistant.", speakers.length ? "success" : "error");
+        const available = speakers.some((s) => s.is_available);
+        this._status(available ? "Sẵn sàng. Nhấn giữ micro để nói." :
+          (speakers.length ? "Các loa đã thêm đều offline/không hỗ trợ phát. Kiểm tra Google Cast." :
+          "Chưa có loa. Vào Settings → Devices & services → P2Talk Google Cast → Configure → Add speaker."),
+          available ? "success" : "error");
       }
     } catch (error) {
       if (!silent) this._status(`Không đọc được danh sách loa: ${error.message || error}`, "error");
@@ -208,6 +215,14 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._loadingSpeakers = false;
       this._refreshControls();
     }
+  }
+
+  _applySpeakerVolume() {
+    const current = this._configuredSpeakers.find((s) => s.entity_id === this.$("speaker").value);
+    const volume = current?.configured_volume ?? 0.65;
+    const percentage = Math.min(100, Math.max(5, Math.round(volume * 100)));
+    this.$("volume").value = String(percentage);
+    this.$("volumeText").textContent = `${percentage}%`;
   }
 
   _stopTracks() {
@@ -286,26 +301,40 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       return;
     }
     this._sending = true;
+    this.$("metrics").textContent = "";
     this._refreshControls();
     const speaker = this.$("speaker").value;
     let uploadId = null;
     try {
       const response = await this._hass.callWS({ type:`${DOMAIN}/upload_start`, mime_type: blob.type.split(";")[0] });
       uploadId = response.upload_id;
-      for (let offset=0; offset<blob.size; offset+=CHUNK_BYTES) {
-        const part = new Uint8Array(await blob.slice(offset, offset+CHUNK_BYTES).arrayBuffer());
-        const data = btoa(String.fromCharCode(...part));
-        await this._hass.callWS({ type:`${DOMAIN}/upload_chunk`, upload_id:uploadId, data });
-        this.$("counter").textContent = `Đang gửi ${Math.min(100,Math.round((offset+part.length)*100/blob.size))}%`;
+      // A single WebSocket preserves message order; six outstanding replies
+      // avoid one round trip per 48 KiB chunk on mobile Wi-Fi.
+      const chunksCount = Math.ceil(blob.size / CHUNK_BYTES);
+      for (let batchStart = 0; batchStart < chunksCount; batchStart += UPLOAD_WINDOW) {
+        const pending = [];
+        const until = Math.min(chunksCount, batchStart + UPLOAD_WINDOW);
+        for (let index = batchStart; index < until; index++) {
+          const offset = index * CHUNK_BYTES;
+          const part = new Uint8Array(await blob.slice(offset, offset + CHUNK_BYTES).arrayBuffer());
+          const data = btoa(String.fromCharCode(...part));
+          pending.push(this._hass.callWS({ type:`${DOMAIN}/upload_chunk`, upload_id:uploadId, index, data }));
+        }
+        await Promise.all(pending);
+        this.$("counter").textContent = `Đang gửi ${Math.round(until * 100 / chunksCount)}%`;
       }
-      await this._hass.callWS({
+      const result = await this._hass.callWS({
         type:`${DOMAIN}/upload_finish`, upload_id:uploadId,
         speaker, volume:Number(this.$("volume").value)/100,
       });
+      if (result.performance) {
+        const m = result.performance;
+        this.$("metrics").textContent = `Chuyển dữ liệu: ${m.transfer_ms} ms · FFmpeg: ${m.convert_ms} ms · Lệnh HA: ${m.service_ms} ms. Thời gian loa bắt đầu phát có thể lâu hơn.`;
+      }
       uploadId = null;
       this._status(`Đã gửi giọng nói đến ${this.$("speaker").selectedOptions[0]?.textContent || speaker}.`, "success");
     } catch (error) {
-      this._status(`Không phát được âm thanh: ${error.message || error}`, "error");
+      this._status(`Không phát được âm thanh (${error.code || "error"}): ${error.message || error}. Xem Settings → System → Logs.`, "error");
       if (uploadId) {
         try { await this._hass.callWS({ type:`${DOMAIN}/upload_cancel`, upload_id:uploadId }); }
         catch (_) { /* It may already have expired or been consumed. */ }

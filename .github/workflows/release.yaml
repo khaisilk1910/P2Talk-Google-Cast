@@ -1,0 +1,178 @@
+name: Release P2Talk Google Cast
+
+# IMPORTANT: Run this workflow rather than publishing a release manually.
+# The tagged commit must already contain the matching manifest.json version,
+# because HACS/Marketplace installs files from the GitHub release tag.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (x.y.z; e.g. 1.2.0; no v prefix)'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p2talk-google-cast-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Validate, bump manifest, tag and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Require main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo 'ERROR: Run this workflow from the main branch.' >&2
+          exit 1
+
+      - name: Checkout current main with tags
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check version and existing tag
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          # Validate BEFORE using the version in any git/ref/file operation.
+          python -c 'import os, sys; sys.path.insert(0, "scripts"); from prepare_release import parse_version; print(parse_version(os.environ["RELEASE_VERSION"]))'
+          git fetch origin main --tags
+          if git show-ref --verify --quiet "refs/tags/${RELEASE_VERSION}"; then
+            echo "ERROR: Tag ${RELEASE_VERSION} already exists. Releases are immutable." >&2
+            exit 1
+          fi
+          # Abort if main advanced after checkout, before changing the manifest.
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || {
+            echo 'ERROR: main changed during checkout; rerun this workflow.' >&2
+            exit 1
+          }
+
+      - name: Set release version in manifest BEFORE tagging
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: python scripts/prepare_release.py --version "$RELEASE_VERSION"
+
+      - name: Validate Python and JavaScript
+        run: |
+          set -euo pipefail
+          python -m compileall -q custom_components/p2talk_google_cast
+          node --check custom_components/p2talk_google_cast/frontend/panel.js
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Validate HACS integration structure
+        uses: hacs/action@main
+        with:
+          category: integration
+
+      - name: Verify release metadata
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          m = json.loads(Path('custom_components/p2talk_google_cast/manifest.json').read_text())
+          h = json.loads(Path('hacs.json').read_text())
+          assert m['version'] == os.environ['RELEASE_VERSION']
+          assert m['domain'] == 'p2talk_google_cast'
+          assert h['name'] == m['name']
+          assert h.get('zip_release') is not True, 'HACS should use the tagged source archive'
+          print('OK: HACS/Marketplace manifest matches intended release')
+          PY
+          git diff --check
+
+      - name: Commit manifest and push main
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --quiet -- custom_components/p2talk_google_cast/manifest.json; then
+            git add custom_components/p2talk_google_cast/manifest.json
+            git commit -m "chore(release): ${RELEASE_VERSION}"
+            git push origin HEAD:main
+          else
+            echo 'Version already matches; no manifest commit needed.'
+          fi
+
+      - name: Create and push immutable release tag
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git tag -a "$RELEASE_VERSION" -m "P2Talk Google Cast $RELEASE_VERSION"
+          git push origin "refs/tags/${RELEASE_VERSION}"
+          # Verify the actual source snapshot that HACS will install.
+          git show "${RELEASE_VERSION}:custom_components/p2talk_google_cast/manifest.json" > /tmp/p2talk-tagged-manifest.json
+          python - <<'PY'
+          import json
+          import os
+          assert json.load(open('/tmp/p2talk-tagged-manifest.json'))['version'] == os.environ['RELEASE_VERSION']
+          print('OK: Tagged manifest matches release version')
+          PY
+
+      - name: Build and verify optional manual-download ZIP
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          git archive --format=zip --output="dist/P2Talk-Google-Cast-${RELEASE_VERSION}.zip" "$RELEASE_VERSION"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          ver = os.environ['RELEASE_VERSION']
+          path = Path(f'dist/P2Talk-Google-Cast-{ver}.zip')
+          with ZipFile(path) as z:
+              file = 'custom_components/p2talk_google_cast/manifest.json'
+              assert json.loads(z.read(file))['version'] == ver
+              assert z.testzip() is None, 'ZIP contains invalid files'
+          print(f'OK: {path} contains matching manifest and valid source')
+          PY
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_VERSION" \
+            "dist/P2Talk-Google-Cast-${RELEASE_VERSION}.zip" \
+            --title "P2Talk Google Cast ${RELEASE_VERSION}" \
+            --generate-notes \
+            --verify-tag
+
+      - name: Confirm published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_VERSION" --json tagName,url,isDraft \
+            | jq -e --arg version "$RELEASE_VERSION" \
+              'select(.tagName == $version and .isDraft == false) | .url'

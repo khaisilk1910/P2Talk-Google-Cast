@@ -1,21 +1,83 @@
 {
   "title": "P2Talk Google Cast",
   "config": {
-    "step": {"user": {"title": "P2Talk Google Cast", "description": "Enable the P2Talk Google Cast panel in the Home Assistant sidebar. No token or extra port is needed."}},
-    "abort": {"already_configured": "P2Talk Google Cast is already configured."}
+    "step": {
+      "user": {
+        "title": "P2Talk Google Cast",
+        "description": "Select initial speakers (optional). All speakers can be added, renamed or removed later in Configure.",
+        "data": {
+          "speakers": "Speakers to add"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "P2Talk Google Cast is already configured."
+    }
   },
   "options": {
     "step": {
       "init": {
-        "title": "P2Talk Google Cast settings",
+        "title": "Manage P2Talk Google Cast",
+        "menu_options": {
+          "add": "Add speaker",
+          "edit_select": "Edit speaker",
+          "remove_select": "Remove speaker",
+          "settings": "Audio and performance settings"
+        }
+      },
+      "add": {
+        "title": "Add speaker",
+        "description": "Choose a media_player entity, optional label and its initial volume. For best results choose a Google Cast speaker.",
         "data": {
-          "audio_bitrate": "MP3 bitrate",
+          "entity_id": "Home Assistant speaker",
+          "name": "Custom speaker name (optional)",
+          "volume": "Default volume (0.05–1.0)"
+        }
+      },
+      "edit_select": {
+        "title": "Select speaker to edit",
+        "data": {
+          "speaker": "Configured speaker"
+        }
+      },
+      "edit": {
+        "title": "Edit speaker",
+        "data": {
+          "entity_id": "Home Assistant speaker",
+          "name": "Custom speaker name (optional)",
+          "volume": "Default volume (0.05–1.0)"
+        }
+      },
+      "remove_select": {
+        "title": "Select speaker to remove",
+        "data": {
+          "speaker": "Configured speaker"
+        }
+      },
+      "remove": {
+        "title": "Confirm removal",
+        "description": "Removing a speaker from P2Talk does not delete it from Home Assistant / Google Cast.",
+        "data": {
+          "confirm": "Confirm remove speaker"
+        }
+      },
+      "settings": {
+        "title": "Audio / performance",
+        "data": {
+          "audio_bitrate": "MP3 bitrate (mono speech)",
           "max_record_seconds": "Maximum recording length (seconds)",
           "retention_hours": "Recording retention (hours)",
-          "default_volume": "Default speaker volume (0.05–1.0)",
-          "ffmpeg_path": "FFmpeg binary path"
+          "default_volume": "Fallback speaker volume (0.05–1.0)",
+          "ffmpeg_path": "FFmpeg executable path"
         }
       }
+    },
+    "error": {
+      "already_added": "Speaker already exists in P2Talk list.",
+      "not_confirmed": "Confirm removal to continue."
+    },
+    "abort": {
+      "speaker_missing": "Speaker is no longer configured."
     }
   }
 }

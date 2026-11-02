@@ -30,7 +30,7 @@ sys.modules.setdefault("homeassistant.core", ha_core)
 pkg = types.ModuleType("p2talk_google_cast")
 pkg.__path__ = [str(COMPONENT)]
 sys.modules.setdefault("p2talk_google_cast", pkg)
-from p2talk_google_cast import audio  # noqa: E402
+from p2talk_google_cast import audio, speakers  # noqa: E402
 
 
 class FakeHass:
@@ -131,6 +131,55 @@ class AudioTests(unittest.IsolatedAsyncioTestCase):
         media_file = Path(self.temp.name) / "p2talk_google_cast" / media_id.rsplit("/", 1)[-1]
         self.assertGreater(media_file.stat().st_size, 100)
         self.assertEqual(media_file.suffix, ".mp3")
+
+
+
+class SpeakerAllowlistTests(unittest.TestCase):
+    """No Home Assistant service should be able to target an unconfigured entity."""
+
+    def setUp(self):
+        self.opts = {"audio_bitrate": "64k", "speakers": [
+            {"entity_id": "media_player.living_room", "name": "Phòng khách", "volume": 0.65},
+            {"entity_id": "media_player.kitchen", "name": "", "volume": 0.4},
+        ]}
+
+    def test_only_configured_speakers_allowed(self):
+        self.assertIsNotNone(speakers.speaker_by_id(self.opts, "media_player.living_room"))
+        self.assertIsNone(speakers.speaker_by_id(self.opts, "media_player.unlisted"))
+        self.assertIsNone(speakers.speaker_by_id({}, "media_player.living_room"))
+
+    def test_add_preserves_audio_settings_and_order(self):
+        out = speakers.upsert_speaker(self.opts, {"entity_id": "media_player.office", "name": "Office", "volume": 0.5})
+        self.assertEqual(out["audio_bitrate"], "64k")
+        self.assertEqual([i["entity_id"] for i in out["speakers"]], [
+            "media_player.living_room", "media_player.kitchen", "media_player.office"
+        ])
+        self.assertEqual(len(self.opts["speakers"]), 2)
+
+    def test_edit_entity_and_name_keeps_order(self):
+        out = speakers.upsert_speaker(self.opts, {"entity_id": "media_player.new_room", "name": "New", "volume": 0.8}, original="media_player.living_room")
+        self.assertEqual([i["entity_id"] for i in out["speakers"]], ["media_player.new_room", "media_player.kitchen"])
+        self.assertIsNone(speakers.speaker_by_id(out, "media_player.living_room"))
+
+    def test_remove_does_not_modify_original(self):
+        out = speakers.remove_speaker(self.opts, "media_player.kitchen")
+        self.assertEqual(len(out["speakers"]), 1)
+        self.assertEqual(len(self.opts["speakers"]), 2)
+        self.assertEqual(out["audio_bitrate"], "64k")
+
+    def test_invalid_duplicates_and_old_entries_ignored(self):
+        opts = {"speakers": [
+            self.opts["speakers"][0], self.opts["speakers"][0],
+            {"entity_id": "light.living_room", "name": "Not a speaker"},
+            {"name": "Broken"}, "junk",
+        ]}
+        self.assertEqual(len(speakers.configured_speakers(opts)), 1)
+
+    def test_malformed_alias_and_volume_normalized(self):
+        opts = {"speakers": [{"entity_id": "media_player.test", "name": 7, "volume": 200}]}
+        self.assertEqual(speakers.configured_speakers(opts)[0], {
+            "entity_id": "media_player.test", "name": "", "volume": None,
+        })
 
 
 if __name__ == "__main__":

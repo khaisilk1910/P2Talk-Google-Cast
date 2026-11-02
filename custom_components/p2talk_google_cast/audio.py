@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     AUDIO_FORMATS,
+    MAX_AUDIO_BYTES,
     CONF_AUDIO_BITRATE,
     CONF_FFMPEG_PATH,
     CONF_MAX_RECORD_SECONDS,
@@ -79,6 +80,8 @@ async def async_convert(
 
     FFmpeg is restricted to a known browser audio container and local I/O.
     """
+    if not audio or len(audio) > MAX_AUDIO_BYTES:
+        raise AudioError("Bản ghi âm trống hoặc vượt quá giới hạn dung lượng.")
     input_format = AUDIO_FORMATS.get(mime_type)
     if input_format is None:
         raise AudioError("Định dạng ghi âm không được hỗ trợ.")
@@ -95,6 +98,7 @@ async def async_convert(
         args = [
             str(options.get(CONF_FFMPEG_PATH, DEFAULTS[CONF_FFMPEG_PATH])),
             "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+            "-threads", "1",
             "-protocol_whitelist", "file,pipe",
             "-f", input_format, "-i", str(source_file),
             "-vn", "-ac", "1", "-ar", "24000",
@@ -118,7 +122,7 @@ async def async_convert(
         except TimeoutError as err:
             raise AudioError("FFmpeg xử lý quá thời gian cho phép.") from err
         if process.returncode != 0:
-            _LOGGER.warning("FFmpeg failed: %s", stderr.decode(errors="replace")[-500:])
+            _LOGGER.warning("P2Talk FFmpeg exited code=%s: %s", process.returncode, stderr.decode(errors="replace")[-500:])
             raise AudioError("Không chuyển đổi được âm thanh. Kiểm tra codec và FFmpeg.")
         size = await hass.async_add_executor_job(lambda: output_file.stat().st_size if output_file.exists() else 0)
         if size == 0:
