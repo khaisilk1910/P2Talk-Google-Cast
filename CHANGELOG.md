@@ -1,3 +1,9 @@
+## Chưa phát hành — Microphone diagnostics
+
+- Phân biệt HTTPS không an toàn, WebView thiếu API, MediaRecorder không hỗ trợ, lỗi quyền microphone và micro đang bận/không có.
+- Chẩn đoán trên panel: HTTP/HTTPS, secure context, API, quyền microphone và mã lỗi, không tiết lộ URL hay dữ liệu ghi âm.
+- Hướng dẫn khắc phục trực tiếp trong giao diện và README; không có tiến trình nền hoặc thay đổi upload API.
+
 # Changelog — P2Talk Google Cast
 
 ## Unreleased — Live Concept UI

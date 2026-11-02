@@ -37,6 +37,89 @@ const glyphs = {
 function icon(name, className = "") {
   return `<svg class="svg-icon ${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${glyphs[name]}</svg>`;
 }
+/**
+ * Diagnose the client that is actually displaying Home Assistant.
+ * Client-side capture failures never reach the Home Assistant Core logs.
+ * Do not log URLs, user identities, device IDs, or raw microphone samples.
+ */
+function microphoneEnvironment() {
+  const secure = window.isSecureContext === true;
+  const getUserMedia = typeof navigator.mediaDevices?.getUserMedia === "function";
+  const mediaRecorder = typeof window.MediaRecorder === "function";
+  let embedded = false;
+  try { embedded = window.self !== window.top; }
+  catch (_) { embedded = true; }
+  return {
+    protocol: window.location?.protocol === "https:" ? "HTTPS" : window.location?.protocol === "http:" ? "HTTP" : "other",
+    secure, getUserMedia, mediaRecorder, embedded,
+  };
+}
+
+function microphoneAdvice(error, environment = microphoneEnvironment()) {
+  const name = error?.name || "";
+  if (!environment.getUserMedia && !environment.secure) {
+    return {
+      code: "insecure_context",
+      message: "Micro bị chặn vì Home Assistant đang mở trong kết nối không an toàn.",
+      action: "Mở Home Assistant bằng HTTPS với chứng chỉ hợp lệ (không dùng HTTP qua IP LAN hay .local). Sau đó tải lại trang và cấp quyền microphone.",
+    };
+  }
+  if (!environment.getUserMedia) {
+    return {
+      code: "capture_api_unavailable",
+      message: "Trình duyệt/WebView này không cung cấp API truy cập microphone.",
+      action: "Thử cùng địa chỉ HTTPS bằng Chrome, Edge hoặc Safari mới nhất. Cập nhật Companion App/WebView; nếu ứng dụng vẫn lỗi nhưng trình duyệt chạy được, hãy dùng trình duyệt.",
+    };
+  }
+  if (!environment.mediaRecorder) {
+    return {
+      code: "recorder_unavailable",
+      message: "Trình duyệt/WebView không hỗ trợ MediaRecorder để ghi âm.",
+      action: "Cập nhật trình duyệt hoặc Android System WebView/Companion App và thử bằng trình duyệt hiện đại có hỗ trợ MediaRecorder.",
+    };
+  }
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    return {
+      code: "permission_denied",
+      message: "Microphone đã bị từ chối quyền truy cập.",
+      action: "Cho phép Microphone cho địa chỉ Home Assistant trong trình duyệt và trong Cài đặt ứng dụng của điện thoại. Tải lại trang rồi thử lại.",
+    };
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return {
+      code: "microphone_missing",
+      message: "Không tìm thấy microphone trên thiết bị đang dùng.",
+      action: "Kiểm tra micro, tai nghe hoặc thiết bị đầu vào của máy, rồi thử lại.",
+    };
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return {
+      code: "microphone_busy",
+      message: "Không thể đọc micro: có thể micro đang bị ứng dụng khác chiếm dụng.",
+      action: "Đóng ứng dụng gọi điện/ghi âm khác, kiểm tra quyền của hệ điều hành, rồi mở lại Home Assistant.",
+    };
+  }
+  if (name === "SecurityError") {
+    return {
+      code: "capture_blocked",
+      message: "Trình duyệt chặn micro vì chính sách bảo mật của trang.",
+      action: "Mở P2Talk trực tiếp trong Home Assistant qua HTTPS, không nhúng vào iframe hạn chế quyền micro.",
+    };
+  }
+  if (name === "OverconstrainedError") {
+    return {
+      code: "unsupported_constraints",
+      message: "Thiết bị không hỗ trợ các thông số thu âm yêu cầu.",
+      action: "Thử lại bằng cấu hình thu âm cơ bản hoặc một microphone khác.",
+    };
+  }
+  return {
+    code: "capture_failed",
+    message: `Không mở được microphone (${name || "unknown"}).`,
+    action: "Kiểm tra HTTPS, quyền microphone và các ứng dụng đang sử dụng micro. Mở mục Chẩn đoán micro bên dưới để xem nguyên nhân.",
+  };
+}
+
 const mark = `<svg class="mark-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M13 25c-5 5-5 15 0 20m38-20c5 5 5 15 0 20" stroke="white" stroke-width="3" stroke-linecap="round" opacity=".65"/><rect x="27" y="14" width="10" height="29" rx="5" fill="white"/><path d="M21 34a11 11 0 0 0 22 0M32 46v8m-8 0h16" stroke="white" stroke-width="3.5" stroke-linecap="round"/><path d="M43 44h10v11H43" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 49a5 5 0 0 1 5 5" stroke="white" stroke-width="2.3" stroke-linecap="round"/></svg>`;
 
 const styles = `
@@ -382,6 +465,13 @@ h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; mar
 @media (prefers-reduced-motion:reduce) {
  .wave span,.mic,.mic-orbit::before,.mic-orbit::after { animation:none!important; transition:none!important; }
 }
+.mic-help { margin-top:12px; border:1px solid var(--pt-border); border-radius:13px; padding:12px 14px; background:var(--pt-tint); color:var(--pt-ink); font-size:12px; line-height:1.55; }
+.mic-help[hidden] { display:none; }
+.mic-help summary { color:var(--pt-primary); font-weight:780; cursor:pointer; }
+.mic-help p { margin:7px 0; }
+.mic-help a { color:var(--pt-primary); font-weight:720; }
+.mic-help pre { padding:9px 11px; max-width:100%; overflow-x:auto; white-space:pre-wrap; word-break:break-word; border:1px solid var(--pt-border); border-radius:9px; color:var(--pt-muted); font:11px/1.5 ui-monospace,monospace; }
+.mic-help .copy-diagnostics { margin-top:2px; border:1px solid var(--pt-border); background:var(--pt-card); color:var(--pt-ink); padding:7px 10px; border-radius:9px; cursor:pointer; font-size:12px; font-weight:730; }
 
 `;
 
@@ -448,12 +538,26 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         <div class="actions"><button type="button" class="action" id="cancel" disabled>${icon("close")} Hủy</button>
         <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng loa</button></div>
         <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><div class="status-copy"><strong id="statusText" class="status-content">Đang kết nối Home Assistant...</strong><small id="statusNote">Đang kiểm tra quyền truy cập và thiết bị.</small></div><span class="status-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+        <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro & cách khắc phục</summary>
+          <p id="micAction"></p><pre id="micDetails"></pre>
+          <button id="micCopy" type="button" class="copy-diagnostics">Sao chép chẩn đoán</button>
+          <p><a href="https://www.home-assistant.io/docs/configuration/remote/" target="_blank" rel="noopener noreferrer">Hướng dẫn HTTPS/Home Assistant</a></p>
+          <p>Lỗi ghi âm xảy ra ở thiết bị đang mở giao diện; nó có thể không xuất hiện trong log Home Assistant Core.</p>
+        </details>
         <div id="metrics" class="metrics" aria-live="polite"></div>
         <footer class="foot"><span class="privacy">${icon("lock")} Âm thanh qua phiên Home Assistant đã đăng nhập · Không cần token</span><span class="foot-brand">P2Talk · Google Cast</span></footer>
         </div>
       </main></div>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this.$("refresh").addEventListener("click", () => this._loadSpeakers());
+    this.$("micCopy").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(this.$("micDetails").textContent);
+        this.$("micCopy").textContent = "Đã sao chép";
+      } catch (_) {
+        this.$("micCopy").textContent = "Hãy chọn và sao chép phần chẩn đoán";
+      }
+    });
     this.$("speaker").addEventListener("change", (e) => {
       saveSpeakerPreference(e.target.value);
       this._applySpeakerVolume();
@@ -513,13 +617,13 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._stopTracks();
   }
 
-  _status(message, type = "") {
+  _status(message, type = "", note = null) {
     const el = this.$("status");
     if (!el) return;
     this.$("statusText").textContent = message;
     this.$("statusIcon").innerHTML = icon(type === "success" ? "check" : type === "error" ? "alert" : type === "loading" ? "refresh" : "info");
     const secondary = this.$("statusNote");
-    secondary.textContent = type === "success" ? "Âm thanh được gửi qua phiên Home Assistant đã đăng nhập." : type === "error" ? "Kiểm tra kết nối thiết bị và Settings → System → Logs." : type === "loading" ? "Đang xử lý yêu cầu của bạn..." : "Chọn loa và nhấn giữ nút micro để nói.";
+    secondary.textContent = note ?? (type === "success" ? "Âm thanh được gửi qua phiên Home Assistant đã đăng nhập." : type === "error" ? "Kiểm tra kết nối thiết bị và Settings → System → Logs." : type === "loading" ? "Đang xử lý yêu cầu của bạn..." : "Chọn loa và nhấn giữ nút micro để nói.");
     const pill = this.$("connectionPill");
     if (pill) {
       pill.className = `lan-pill ${type === "error" ? "unavailable" : type === "loading" ? "busy" : ""}`;
@@ -619,6 +723,37 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._refreshControls();
   }
 
+  async _showMicrophoneFailure(error) {
+    const environment = microphoneEnvironment();
+    const advice = microphoneAdvice(error, environment);
+    const help = this.$("micHelp");
+    help.hidden = false;
+    help.open = true;
+    this.$("micAction").textContent = advice.action;
+    this.$("micCopy").textContent = "Sao chép chẩn đoán";
+    let permission = "not available";
+    try {
+      if (navigator.permissions?.query) {
+        const status = await navigator.permissions.query({ name: "microphone" });
+        permission = status.state || "unknown";
+      }
+    } catch (_) { /* Safari/WebViews may not expose microphone permission query. */ }
+    const report = [
+      `P2Talk microphone: ${advice.code}`,
+      `Protocol: ${environment.protocol}`,
+      `Secure context: ${environment.secure}`,
+      `getUserMedia: ${environment.getUserMedia}`,
+      `MediaRecorder: ${environment.mediaRecorder}`,
+      `Embedded frame: ${environment.embedded}`,
+      `Mic permission: ${permission}`,
+      `Error type: ${error?.name || "none"}`,
+    ].join("\n");
+    this.$("micDetails").textContent = report;
+    // Client-side errors never reach HA Core logs. No recorded sound or URLs logged.
+    console.warn("[P2Talk][microphone]", report);
+    this._status(advice.message, "error", advice.action);
+  }
+
   _stopTracks() {
     if (this._stream) this._stream.getTracks().forEach((track) => track.stop());
     this._stream = null;
@@ -629,15 +764,15 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._pressed = true;
     this._discard = false;
     try {
-      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-        throw new Error("Trình duyệt hoặc WebView không hỗ trợ ghi âm. Hãy dùng HTTPS và trình duyệt hiện đại.");
+      if (typeof navigator.mediaDevices?.getUserMedia !== "function" || typeof window.MediaRecorder !== "function") {
+        throw new Error("microphone_api_unavailable");
       }
       this._stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation:true, noiseSuppression:true, autoGainControl:true },
       });
       if (!this._pressed) { this._stopTracks(); return; }
       const candidates = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus", "audio/webm"];
-      const mime = candidates.find((type) => MediaRecorder.isTypeSupported(type));
+      const mime = candidates.find((type) => typeof MediaRecorder.isTypeSupported === "function" && MediaRecorder.isTypeSupported(type));
       this._recorder = new MediaRecorder(this._stream, mime ? { mimeType:mime } : {});
       this._chunks = [];
       this._recorder.addEventListener("dataavailable", (event) => {
@@ -650,6 +785,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this.$("stage").classList.add("recording");
       this.$("hint").textContent = "ĐANG GHI ÂM — THẢ ĐỂ PHÁT";
       this.$("micText").innerHTML = "Đang ghi âm<br>Thả để phát";
+      this.$("micHelp").hidden = true;
       this._status("Đang thu âm giọng nói...", "loading");
       this._timer = setInterval(() => {
         const seconds = Math.floor((Date.now() - this._started) / 1000);
@@ -660,7 +796,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     } catch (error) {
       this._pressed = false;
       this._stopTracks();
-      this._status(`Không thể mở micro: ${error.message || error}`, "error");
+      await this._showMicrophoneFailure(error);
     }
   }
 

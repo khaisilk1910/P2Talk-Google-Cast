@@ -32,6 +32,19 @@ Nhấn nút **Add to HACS** ở đầu trang, chọn Home Assistant của bạn,
 
 > **Lưu ý:** Cho phép quyền microphone và truy cập Home Assistant qua HTTPS (hoặc ngữ cảnh bảo mật được trình duyệt hỗ trợ). Loa Cast phải truy cập được địa chỉ mạng nội bộ của Home Assistant; nên cấu hình **Internal URL** bằng IP LAN phù hợp.
 
+## Khắc phục lỗi microphone
+
+Nếu nhấn giữ micro nhưng thấy lỗi, hãy mở **Chẩn đoán micro & cách khắc phục** trên panel P2Talk.
+
+- **`insecure_context` / `Secure context: false`**: Bạn đang mở Home Assistant qua HTTP LAN như `http://192.168.x.x:8123` hoặc `http://homeassistant.local:8123`. Trình duyệt thường **không cho dùng microphone trên HTTP**. Sử dụng HTTPS với chứng chỉ hợp lệ (ví dụ reverse proxy SSL + DNS LAN) rồi tải lại trang. Không thể sửa lỗi bảo mật này chỉ bằng mã JavaScript của HACS. [Hướng dẫn truy cập an toàn](https://www.home-assistant.io/docs/configuration/remote/).
+- **`capture_api_unavailable` với `Secure context: true`**: WebView/Companion App không cung cấp `getUserMedia`. Cập nhật ứng dụng và WebView; thử Chrome/Safari/Edge mở **cùng URL HTTPS** để xác định có phải hạn chế WebView.
+- **`permission_denied`**: Cấp quyền Microphone cho trang web và cho Companion App trong cài đặt điện thoại, sau đó tải lại trang.
+- **`microphone_missing` / `microphone_busy`**: Kiểm tra thiết bị nhập âm thanh hoặc ứng dụng khác đang sử dụng micro.
+
+Nút **Sao chép chẩn đoán** tạo thông tin không chứa âm thanh, tài khoản, token hoặc địa chỉ Home Assistant. Đây là lỗi frontend nên **không nhất thiết xuất hiện trong Settings → System → Logs**; có thể xem thông báo `[P2Talk][microphone]` tại Console của trình duyệt.
+
+**Để giữ dữ liệu local:** Sử dụng tên miền nội bộ truy cập LAN qua HTTPS được thiết bị tin cậy, không yêu cầu đẩy giọng nói qua máy chủ ngoài. Home Assistant Cloud HTTPS là một lựa chọn dễ thiết lập nhưng khi truy cập từ xa, lưu lượng giao diện/ghi âm đi qua dịch vụ cloud thay vì hoàn toàn local.
+
 ## Bảo mật và quyền riêng tư
 
 - Chỉ người dùng Home Assistant có quyền phù hợp mới có thể điều khiển loa đã được cấu hình; không mở web server hoặc cổng điều khiển riêng.

@@ -78,6 +78,8 @@ jobs:
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+      - name: Test microphone diagnostics (Node.js)
+        run: node tests/test_microphone.cjs
 
       - name: Validate HACS integration structure
         uses: hacs/action@main

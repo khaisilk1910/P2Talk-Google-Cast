@@ -22,6 +22,8 @@ jobs:
         run: node --check custom_components/p2talk_google_cast/frontend/panel.js
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+      - name: Test microphone diagnostics (Node.js)
+        run: node tests/test_microphone.cjs
       - name: Validate HACS/Marketplace metadata
         run: python -c 'import json; from pathlib import Path; p=Path("custom_components/p2talk_google_cast"); m=json.loads((p/"manifest.json").read_text()); h=json.loads(Path("hacs.json").read_text()); assert m["domain"]==p.name and m["name"]==h["name"] and m["config_flow"] is True'
   hacs:
