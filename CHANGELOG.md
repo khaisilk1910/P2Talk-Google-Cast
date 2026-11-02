@@ -1,3 +1,10 @@
+## Unreleased — Native Home Assistant HTTPS URL
+
+- Bỏ trường HTTPS microphone khỏi Options Flow, tự loại bỏ giá trị `mic_https_url` cũ nếu nâng cấp.
+- Chỉ sử dụng HTTPS URL khai báo trong Home Assistant tại Settings → System → Network (ưu tiên External URL, dự phòng Internal URL HTTPS).
+- Khi đang mở P2Talk qua HTTP LAN mà HA chưa có HTTPS URL, hiển thị thông báo và đường dẫn cấu hình rõ ràng; không báo lỗi microphone chung chung.
+- Dùng panel cùng phiên Home Assistant và WebSocket xác thực như trước; không tạo cổng hay dịch vụ riêng. Không thay đổi cách Google Cast nhận URL media LAN.
+
 ## Unreleased — HTTPS microphone entry routing
 
 - When opened on an insecure HTTP LAN origin, microphone press now offers/navigates to the configured Home Assistant HTTPS panel instead of attempting a blocked microphone request.

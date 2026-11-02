@@ -22,6 +22,12 @@ _ASSETS_REGISTERED = f"{DOMAIN}_static_assets_registered"
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     """No discovery, file scans, subprocesses, or network requests at boot."""
+    # Old releases allowed a per-integration HTTPS URL. Always use HA-managed
+    # Network URLs now, and remove any stale option without restarting HA.
+    if "mic_https_url" in entry.options:
+        hass.config_entries.async_update_entry(
+            entry, options={key: val for key, val in entry.options.items() if key != "mic_https_url"}
+        )
     runtime = Runtime(entry)
     hass.data[DOMAIN] = runtime
     if not hass.data.get(_ASSETS_REGISTERED):

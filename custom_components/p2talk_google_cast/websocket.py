@@ -32,7 +32,7 @@ from .const import (
     UPLOAD_TTL_SECONDS,
 )
 from .speakers import configured_speakers, speaker_by_id
-from .secure_url import microphone_https_panel_url
+from .secure_url import configured_https_panel
 
 _LOGGER = logging.getLogger(__name__)
 _REGISTERED_KEY = f"{DOMAIN}_ws_registered"
@@ -126,12 +126,14 @@ def ws_speakers(hass: HomeAssistant, connection, msg) -> None:
             "volume_level": state.attributes.get("volume_level") if state else None,
             "configured_volume": item["volume"] if item["volume"] is not None else runtime.entry.options.get(CONF_DEFAULT_VOLUME, DEFAULTS[CONF_DEFAULT_VOLUME]),
         })
+    https_panel_url, https_source = configured_https_panel(hass)
     connection.send_result(msg["id"], {
         "speakers": speakers,
         "max_seconds": runtime.entry.options.get(CONF_MAX_RECORD_SECONDS, DEFAULTS[CONF_MAX_RECORD_SECONDS]),
         "default_volume": runtime.entry.options.get(CONF_DEFAULT_VOLUME, DEFAULTS[CONF_DEFAULT_VOLUME]),
         "max_bytes": MAX_AUDIO_BYTES,
-        "mic_https_url": microphone_https_panel_url(hass, runtime.entry.options),
+        "mic_https_url": https_panel_url,
+        "mic_https_state": https_source,  # external, internal, or missing
     })
 
 

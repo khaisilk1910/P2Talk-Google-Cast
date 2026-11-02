@@ -1,5 +1,4 @@
-"""Regression tests for selecting the HTTPS Home Assistant panel origin."""
-
+"""Home Assistant configured HTTPS URLs only, without integration overrides."""
 from __future__ import annotations
 
 import sys
@@ -8,23 +7,14 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENT = ROOT / "custom_components" / "p2talk_google_cast"
-
-try:
-    import voluptuous as vol
-except ImportError:
-    # The portable test runner does not install Home Assistant dependencies.
-    vol = types.ModuleType("voluptuous")
-    vol.Invalid = type("Invalid", (ValueError,), {})
-    sys.modules["voluptuous"] = vol
-
-if "p2talk_google_cast" not in sys.modules:
-    pkg = types.ModuleType("p2talk_google_cast")
+COMPONENT = ROOT / 'custom_components' / 'p2talk_google_cast'
+if 'p2talk_google_cast' not in sys.modules:
+    pkg = types.ModuleType('p2talk_google_cast')
     pkg.__path__ = [str(COMPONENT)]
-    sys.modules["p2talk_google_cast"] = pkg
+    sys.modules['p2talk_google_cast'] = pkg
 
 from p2talk_google_cast.secure_url import (  # noqa: E402
-    secure_origin, optional_secure_origin, microphone_https_panel_url,
+    configured_https_panel, microphone_https_panel_url, secure_origin,
 )
 
 
@@ -34,43 +24,60 @@ class HttpsRouteTests(unittest.TestCase):
             internal_url=internal, external_url=external,
         ))
 
-    def test_reuses_external_https_when_internal_is_http(self):
-        url = microphone_https_panel_url(self._hass(
-            "http://192.168.1.100:8123", "https://ha.example.com"
-        ), {})
-        self.assertEqual(url, "https://ha.example.com/p2talk_google_cast")
+    def test_external_https_preferred_even_when_internal_is_https(self):
+        hass = self._hass('https://lan.example.net', 'https://ha.example.com')
+        self.assertEqual(configured_https_panel(hass),
+                         ('https://ha.example.com/p2talk_google_cast', 'external'))
 
-    def test_user_supplied_https_takes_priority(self):
-        self.assertEqual(microphone_https_panel_url(
-            self._hass(external="https://cloud.example.com"),
-            {"mic_https_url": "https://ha.home.example:8443/"}),
-            "https://ha.home.example:8443/p2talk_google_cast")
+    def test_https_external_when_internal_is_http(self):
+        hass = self._hass('http://192.168.1.100:8123', 'https://ha.example.com')
+        self.assertEqual(microphone_https_panel_url(hass),
+                         'https://ha.example.com/p2talk_google_cast')
 
-    def test_internal_https_takes_priority_over_external_when_unset(self):
-        self.assertEqual(microphone_https_panel_url(
-            self._hass(internal="https://lan.example.com", external="https://cloud.example.com"),
-            {}), "https://lan.example.com/p2talk_google_cast")
+    def test_https_internal_fallback(self):
+        hass = self._hass('https://ha.home.example:8443/', None)
+        self.assertEqual(configured_https_panel(hass),
+                         ('https://ha.home.example:8443/p2talk_google_cast', 'internal'))
 
-    def test_no_https_no_link(self):
-        self.assertIsNone(microphone_https_panel_url(
-            self._hass(internal="http://192.168.1.100:8123"), {}))
+    def test_missing_ha_urls_is_explicit(self):
+        self.assertEqual(configured_https_panel(self._hass()), (None, 'missing'))
+        self.assertEqual(configured_https_panel(self._hass('http://192.168.1.100:8123')),
+                         (None, 'missing'))
+
+    def test_disallow_non_https_even_if_another_url_is_set(self):
+        hass = self._hass('http://lan.example.com', 'http://ha.example.com')
+        self.assertEqual(configured_https_panel(hass), (None, 'missing'))
 
     def test_invalid_url_never_built_into_redirect(self):
-        for origin in (
-            "http://ha.example.com", "https://user:pass@ha.example.com",
-            "https://ha.example.com/other", "https://ha.example.com?q=1",
-            "https://ha.example.com#hash", "https://ha.example.com:bad",
-            "https://ha.example.com\\@attacker.example", "https://foo bar",
-            "javascript:alert(1)", "https://ha.example.com@evil.example",
-            "https://ha.example.com\n.evil.example",
+        for url in (
+            'http://ha.example.com', 'https://user:pass@ha.example.com',
+            'https://ha.example.com/other', 'https://ha.example.com?q=1',
+            'https://ha.example.com#hash', 'https://ha.example.com:bad',
+            'https://ha.example.com\\@attacker.example', 'https://foo bar',
+            'javascript:alert(1)', 'https://ha.example.com@evil.example',
+            'https://ha.example.com\n.evil.example',
         ):
-            with self.subTest(origin=origin), self.assertRaises(vol.Invalid):
-                secure_origin(origin)
+            with self.subTest(url=url):
+                self.assertIsNone(secure_origin(url))
 
-    def test_https_origin_normalized_and_optional_empty(self):
-        self.assertEqual(optional_secure_origin(""), "")
-        self.assertEqual(secure_origin("https://HA.Example.COM/"), "https://ha.example.com")
+    def test_normalization(self):
+        self.assertEqual(secure_origin('https://HA.Example.COM/'),
+                         'https://ha.example.com')
+
+    def test_config_flow_no_mic_https_option(self):
+        src = (COMPONENT / 'config_flow.py').read_text(encoding='utf-8')
+        self.assertNotIn('CONF_MIC_HTTPS_URL', src)
+        self.assertNotIn('optional_secure_origin', src)
+        for lang in ('strings.json', 'translations/en.json', 'translations/vi.json'):
+            self.assertNotIn('mic_https_url', (COMPONENT / lang).read_text(encoding='utf-8'))
+
+    def test_ws_resolves_ha_settings_dynamically(self):
+        src = (COMPONENT / 'websocket.py').read_text(encoding='utf-8')
+        self.assertIn('configured_https_panel(hass)', src)
+        self.assertIn('"mic_https_state": https_source', src)
+        self.assertNotIn('runtime.entry.options)',
+                         src[src.index('https_panel_url, https_source = '):src.index('https_panel_url, https_source = ')+100])
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

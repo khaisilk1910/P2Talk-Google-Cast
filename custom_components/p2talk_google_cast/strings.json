@@ -68,10 +68,8 @@
           "max_record_seconds": "Maximum recording length (seconds)",
           "retention_hours": "Recording retention (hours)",
           "default_volume": "Fallback speaker volume (0.05–1.0)",
-          "ffmpeg_path": "FFmpeg executable path",
-          "mic_https_url": "Home Assistant HTTPS URL for microphone (optional)"
-        },
-        "description": "To use the microphone when Home Assistant was opened via a local HTTP address, enter its existing HTTPS URL (for example https://ha.example.com). Leave empty to use the Home Assistant internal/external HTTPS URL automatically. When pressing the mic on HTTP, P2Talk opens the HTTPS panel before recording."
+          "ffmpeg_path": "FFmpeg executable path"
+        }
       }
     },
     "error": {

@@ -36,7 +36,7 @@ Nhấn nút **Add to HACS** ở đầu trang, chọn Home Assistant của bạn,
 
 P2Talk dùng microphone của điện thoại/trình duyệt thông qua Home Assistant, không tạo API hoặc dịch vụ âm thanh riêng. Nếu đang mở panel qua IP HTTP, **nhấn nút micro sẽ mở lại P2Talk tại URL HTTPS đã cấu hình**, sau đó nhấn giữ để ghi âm. Không thể ghi âm từ trang HTTP bằng cách chỉ chuyển upload sang HTTPS.
 
-Vào **Settings → Devices & services → P2Talk Google Cast → Configure → Audio/performance** và nhập **Home Assistant HTTPS URL for microphone** (chỉ origin, ví dụ `https://ha.example.com`), hoặc để trống để ưu tiên HTTPS internal/external URL trong cấu hình Home Assistant. HTTPS phải có chứng chỉ hợp lệ và truy cập được từ thiết bị. Người dùng có thể phải đăng nhập lại do origin khác nhau.
+**Không cần khai báo HTTPS trong P2Talk.** Tích hợp tự đọc URL HTTPS từ **Settings → System → Network → Home Assistant URL**, ưu tiên địa chỉ **Internet/External URL** rồi đến địa chỉ **Local network/Internal URL** nếu địa chỉ đó dùng HTTPS. Nếu chưa cấu hình URL HTTPS, khi mở P2Talk bằng HTTP LAN, giao diện sẽ báo rõ vị trí cần thiết lập. Sau khi mở HTTPS có thể cần đăng nhập lại do khác origin.
 
 **Cloudflare Tunnel:** Nếu HTTPS của bạn đi qua Tunnel, bản ghi vẫn đi qua Cloudflare khi tên miền phân giải ra Cloudflare. Muốn đường truyền audio đi hoàn toàn trong LAN, dùng Split DNS trỏ tên miền HTTPS về reverse proxy LAN có chứng chỉ tin cậy. Không thể bảo đảm hoàn toàn local chỉ bằng thay đổi frontend.
 

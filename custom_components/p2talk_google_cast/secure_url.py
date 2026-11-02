@@ -1,62 +1,52 @@
-"""Safe, explicit HTTPS entry point for browser microphone capture.
+"""Home Assistant-configured HTTPS origin for the microphone panel.
 
-A browser can capture audio only when the *page origin* is secure.
-This builds a link back into the same Home Assistant panel; it is not an
-alternate audio endpoint and does not proxy credentials or recorded audio.
+Microphone access is governed by the current browser page's security context.
+This URL is only a same-panel navigation target, never an audio endpoint.
+Do not infer a target from request headers or accept arbitrary URLs from options.
 """
 
 from __future__ import annotations
 
 from urllib.parse import urlsplit, urlunsplit
 
-import voluptuous as vol
-
-from .const import CONF_MIC_HTTPS_URL, PANEL_PATH
+from .const import PANEL_PATH
 
 
-def secure_origin(value: str) -> str:
-    """Validate an HTTPS origin, without paths, credentials or parameters."""
+def secure_origin(value: str) -> str | None:
+    """Return an HTTPS origin, rejecting paths and unsafe URL syntax."""
     if not isinstance(value, str) or not value or len(value) > 256 or any(c.isspace() for c in value):
-        raise vol.Invalid("Enter a valid HTTPS Home Assistant origin")
+        return None
     try:
         parts = urlsplit(value)
         host = parts.hostname
-        port = parts.port  # raises ValueError on invalid port
-    except ValueError as err:
-        raise vol.Invalid("Invalid HTTPS URL") from err
+        _port = parts.port  # fail closed for malformed ports
+    except ValueError:
+        return None
     if (parts.scheme != "https" or not host or parts.username is not None
             or parts.password is not None or parts.query or parts.fragment
-            or parts.path not in ("", "/") or chr(92) in value):
-        raise vol.Invalid("Use only an HTTPS origin, such as https://ha.example.com")
-    if any(char in parts.netloc for char in "?#@"):
-        raise vol.Invalid("Invalid HTTPS hostname")
-    # Netloc is retained so explicit non-default TLS ports continue to work.
+            or parts.path not in ("", "/") or "\\" in value
+            or any(char in parts.netloc for char in "?#@")):
+        return None
     return urlunsplit(("https", parts.netloc.lower(), "", "", ""))
 
 
-def optional_secure_origin(value: str) -> str:
-    """Empty means use Home Assistant URLs rather than another setting."""
-    if value == "":
-        return ""
-    return secure_origin(value)
+def configured_https_panel(hass) -> tuple[str | None, str]:
+    """Use only HA-managed URL settings, not HACS options or cloud fallbacks.
 
-
-def microphone_https_panel_url(hass, options) -> str | None:
-    """Prefer admin-configured HTTPS, then HA's internal or external URL.
-
-    No redirects are made by the backend; the frontend navigates only on a
-    microphone button press, never during startup or background activity.
+    External HTTPS is preferred: it is normally reachable from both the local
+    network and outside. An HTTPS internal URL is the fallback. Neither URL is
+    guessed from HTTP, DNS, request headers or the browser's current origin.
     """
-    for candidate in (
-        options.get(CONF_MIC_HTTPS_URL),
-        getattr(hass.config, "internal_url", None),
-        getattr(hass.config, "external_url", None),
+    for source, candidate in (
+        ("external", getattr(hass.config, "external_url", None)),
+        ("internal", getattr(hass.config, "internal_url", None)),
     ):
-        if not candidate:
-            continue
-        try:
-            origin = secure_origin(candidate)
-        except vol.Invalid:
-            continue
-        return f"{origin}/{PANEL_PATH}"
-    return None
+        origin = secure_origin(candidate)
+        if origin:
+            return f"{origin}/{PANEL_PATH}", source
+    return None, "missing"
+
+
+def microphone_https_panel_url(hass) -> str | None:
+    """Return the HTTPS P2Talk panel URL or None if HA has none configured."""
+    return configured_https_panel(hass)[0]

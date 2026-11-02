@@ -68,10 +68,8 @@
           "max_record_seconds": "Thời lượng thu tối đa (giây)",
           "retention_hours": "Thời gian giữ file ghi âm (giờ)",
           "default_volume": "Âm lượng dự phòng (0.05–1.0)",
-          "ffmpeg_path": "Đường dẫn chương trình FFmpeg",
-          "mic_https_url": "Địa chỉ HTTPS Home Assistant cho micro (không bắt buộc)"
-        },
-        "description": "Nhập địa chỉ HTTPS đang sử dụng, ví dụ https://ha.example.com; để trống để tự lấy từ Home Assistant. Nếu đang mở qua HTTP LAN, bấm micro sẽ chuyển sang panel HTTPS trước khi ghi âm."
+          "ffmpeg_path": "Đường dẫn chương trình FFmpeg"
+        }
       }
     },
     "error": {

@@ -10,7 +10,6 @@ CONF_MAX_RECORD_SECONDS = "max_record_seconds"
 CONF_RETENTION_HOURS = "retention_hours"
 CONF_DEFAULT_VOLUME = "default_volume"
 CONF_FFMPEG_PATH = "ffmpeg_path"
-CONF_MIC_HTTPS_URL = "mic_https_url"
 
 DEFAULTS = {
     CONF_SPEAKERS: [],
@@ -19,7 +18,6 @@ DEFAULTS = {
     CONF_RETENTION_HOURS: 2,
     CONF_DEFAULT_VOLUME: 0.65,
     CONF_FFMPEG_PATH: "ffmpeg",
-    CONF_MIC_HTTPS_URL: "",
 }
 
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
