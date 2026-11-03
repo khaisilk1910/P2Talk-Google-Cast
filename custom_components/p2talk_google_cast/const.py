@@ -31,4 +31,11 @@ AUDIO_FORMATS = {
     "audio/mp4": "mov",
     "audio/wav": "wav",
     "audio/x-wav": "wav",
+    "audio/mpeg": "mp3",
+    "audio/aac": "aac",
+    "audio/3gpp": "mov",
+    "audio/amr": "amr",
+    "audio/x-m4a": "mov",
+    "audio/x-caf": "caf",
+    "audio/flac": "flac",
 }

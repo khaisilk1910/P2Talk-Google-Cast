@@ -26,6 +26,41 @@ function saveSpeakerPreferences(ids) {
   catch (_) { /* Selection still works without persistence. */ }
 }
 
+// Browsers only expose getUserMedia in secure contexts, but a native OS
+// audio recorder can be launched through a user-activated file input on some
+// mobile browsers even when HA itself uses plain HTTP. No direct mic bypass.
+const AUDIO_FILE_MIME = Object.freeze({
+  "audio/webm": "audio/webm", "audio/ogg": "audio/ogg",
+  "audio/mp4": "audio/mp4", "audio/x-m4a": "audio/x-m4a",
+  "audio/wav": "audio/wav", "audio/x-wav": "audio/x-wav", "audio/wave": "audio/wav",
+  "audio/mpeg": "audio/mpeg", "audio/mp3": "audio/mpeg", "audio/x-mp3": "audio/mpeg",
+  "audio/aac": "audio/aac", "audio/3gpp": "audio/3gpp",
+  "audio/amr": "audio/amr", "audio/x-caf": "audio/x-caf",
+  "audio/flac": "audio/flac", "audio/x-flac": "audio/flac",
+});
+const AUDIO_FILE_EXT = Object.freeze({
+  webm: "audio/webm", ogg: "audio/ogg", oga: "audio/ogg",
+  m4a: "audio/mp4", mp4: "audio/mp4", wav: "audio/wav",
+  mp3: "audio/mpeg", aac: "audio/aac", "3gp": "audio/3gpp",
+  "3gpp": "audio/3gpp", amr: "audio/amr", caf: "audio/x-caf",
+  flac: "audio/flac",
+});
+function nativeAudioMime(file) {
+  if (!file || typeof file.name !== "string") return null;
+  const declared = (file.type || "").split(";")[0].trim().toLowerCase();
+  if (Object.hasOwn(AUDIO_FILE_MIME, declared)) return AUDIO_FILE_MIME[declared];
+  // Empty/octet-stream MIME appears with some Android recording apps. Do not
+  // reinterpret a known non-audio MIME (e.g. video/mp4) as an audio file.
+  if (declared && declared !== "application/octet-stream") return null;
+  const ext = file.name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+  return ext && Object.hasOwn(AUDIO_FILE_EXT, ext) ? AUDIO_FILE_EXT[ext] : null;
+}
+function directMicrophoneAvailable() {
+  return window.isSecureContext === true &&
+    typeof navigator.mediaDevices?.getUserMedia === "function" &&
+    typeof window.MediaRecorder === "function";
+}
+
 // Inline, dependency-free SVG icons. No external fonts, icon CDN or runtime package.
 const glyphs = {
   mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"/>',
@@ -246,6 +281,13 @@ h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; mar
 .stage.sending .mic-orbit::after { border-width:3px; border-top-color:var(--pt-primary); border-right-color:transparent; animation:spin 1s linear infinite; }
 .stage.sending .mic { filter:saturate(.6); }
 .stage.sending .wave span { animation:equalize 1.3s ease-in-out infinite alternate; animation-delay:var(--delay); opacity:.55; }
+.native-capture { width:100%; max-width:445px; margin:16px auto 0; text-align:center; }
+.native-audio-button { display:inline-flex; justify-content:center; align-items:center; gap:9px; min-height:44px; padding:10px 17px; border:1px solid var(--pt-primary); border-radius:14px; background:color-mix(in srgb,var(--pt-primary) 10%,var(--pt-card)); color:var(--pt-primary); font:inherit; font-size:13px; font-weight:750; cursor:pointer; }
+.native-audio-button .svg-icon { width:19px; height:19px; }
+.native-audio-button:disabled { opacity:.48; cursor:not-allowed; }
+.native-audio-help { font-size:11px; line-height:1.6; color:var(--pt-muted); margin:8px auto 0; max-width:380px; }
+.https-option { display:block; border:0; background:transparent; color:var(--pt-primary); font:inherit; font-size:11px; text-decoration:underline; cursor:pointer; margin:8px auto 0; }
+.https-option[hidden] { display:none; }
 .hint { font-size:17px; font-weight:800; letter-spacing:-.2px; margin:7px 0 4px; }
 .counter { font-size:12px; min-height:20px; font-variant-numeric:tabular-nums; color:var(--pt-muted); }
 .actions { display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:4px; }
@@ -784,8 +826,10 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this._selectedSpeakerIds = new Set();
     this._selectionInitialized = false;
     this._recordingSpeakerIds = null;
+    this._uploadActive = false;
     this._haHttpsConfigured = false;
     this._micHttpsState = "unknown";
+    this._micHttpsPanelUrl = null;
     this._timer = null;
     this._started = 0;
   }
@@ -855,6 +899,12 @@ class P2TalkGoogleCastPanel extends HTMLElement {
           <div class="stage-kicker">${icon("wifi")} Kết nối qua Home Assistant</div>
           <div class="mic-layout">${waveMarkup()}<div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br/>để nói</span></button></div>${waveMarkup()}</div>
           <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát đến loa đã chọn</div>
+          <div class="native-capture" id="nativeCapture">
+            <button type="button" id="nativeAudioButton" class="native-audio-button">${icon("mic")} Ghi âm bằng điện thoại / Chọn tệp</button>
+            <input id="nativeAudioInput" type="file" accept="audio/*,.m4a,.3gp,.amr,.caf,.flac" capture="user" hidden aria-label="Ghi âm bằng ứng dụng của điện thoại hoặc chọn tệp âm thanh" />
+            <p id="nativeAudioHelp" class="native-audio-help">Trên điện thoại, chọn ứng dụng ghi âm rồi lưu bản ghi. P2Talk sẽ gửi đến các loa đã chọn. Trên máy tính, chọn tệp âm thanh đã ghi.</p>
+            <button type="button" id="httpsOption" class="https-option" hidden>Chuyển sang HTTPS để nhấn giữ nói trực tiếp</button>
+          </div>
         </section>
         <div class="actions"><button type="button" class="action cancel-action" id="cancel" disabled>${icon("close")} Hủy</button>
         <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng các loa</button></div>
@@ -862,6 +912,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
         <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro & cách khắc phục</summary>
           <p id="micAction"></p><pre id="micDetails"></pre>
           <button id="micCopy" type="button" class="copy-diagnostics">Sao chép chẩn đoán</button>
+          <p>Ghi âm bằng ứng dụng điện thoại không cần API micro trực tiếp của trang web. Nếu thiết bị không hiển thị ứng dụng ghi âm, hãy ghi âm trước rồi dùng Chọn tệp. Muốn nhấn giữ để nói trực tiếp trên trình duyệt, hãy dùng HTTPS hoặc ngữ cảnh bảo mật được trình duyệt cho phép.</p>
           <p><a href="https://www.home-assistant.io/docs/configuration/remote/" target="_blank" rel="noopener noreferrer">Hướng dẫn HTTPS/Home Assistant</a></p>
           <p>Lỗi ghi âm xảy ra ở thiết bị đang mở giao diện; nó có thể không xuất hiện trong log Home Assistant Core.</p>
         </details>
@@ -894,6 +945,18 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this.$("volume").style.setProperty("--progress", `${e.target.value}%`);
       // Volume overrides configuration only for this selected playback; not stored.
     });
+    this.$("nativeAudioButton").addEventListener("click", () => {
+      // Only an explicit user gesture opens the operating system recorder/picker.
+      if (!this._sending && !this._recording && this._selectedSpeakers().length) {
+        this.$("nativeAudioInput").click();
+      }
+    });
+    this.$("nativeAudioInput").addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      event.target.value = ""; // Selecting the same recording twice must work.
+      if (file) void this._handleNativeAudio(file);
+    });
+    this.$("httpsOption").addEventListener("click", () => this._openHttpsPanel());
     this.$("cancel").addEventListener("click", () => this._stopRecording(true));
     this.$("stop").addEventListener("click", () => this._stopSpeaker());
     const mic = this.$("mic");
@@ -971,10 +1034,12 @@ class P2TalkGoogleCastPanel extends HTMLElement {
   _refreshControls() {
     if (!this.$) return;
     const selected = this._selectedSpeakers().length > 0;
-    this.$("mic").disabled = this._recording || this._sending || !selected;
+    this.$("mic").disabled = this._recording || this._sending || !selected || !directMicrophoneAvailable();
     // Keep the pressed button operable for pointerup during recording.
     if (this._recording) this.$("mic").disabled = false;
     const locked = this._recording || this._sending;
+    this.$("nativeAudioButton").disabled = locked || !selected;
+    this.$("nativeAudioInput").disabled = locked || !selected;
     if (locked) this.$("speaker").open = false;
     this.$("speakerSummary").setAttribute("aria-disabled", String(locked));
     for (const control of this.$("speakerOptions").querySelectorAll("input")) {
@@ -989,49 +1054,16 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this.$("configure").style.pointerEvents = locked ? "none" : "";
   }
 
-  /**
-   * Redirect the whole HA shell once when this panel is opened on insecure HTTP.
-   * A secure iframe/background fetch cannot grant an HTTP document microphone access.
-   * This runs ONLY on P2Talk panel load, reusing the authenticated speakers response.
-   */
-  _autoRedirectToHttps(panelUrl, candidates = []) {
-    // Redirect only when HTTP cannot provide microphone access. Localhost
-    // may be a trusted HTTP context and should not be redirected unnecessarily.
-    const microphoneAvailable = window.isSecureContext === true &&
-      typeof navigator.mediaDevices?.getUserMedia === "function";
-    if (window.location?.protocol !== "http:" || microphoneAvailable || !panelUrl) return false;
-    const target = selectHttpsPanelUrl(panelUrl, candidates);
+  /** HTTPS remains an explicit user choice: never navigate away from HTTP
+   * automatically, because the native recorder fallback works there. */
+  _openHttpsPanel() {
+    const target = selectHttpsPanelUrl(this._micHttpsPanelUrl, [this._micHttpsPanelUrl]);
     if (!target) {
-      this._status("URL HTTPS trong Home Assistant không hợp lệ.", "error",
-        "Kiểm tra Settings → System → Network → Home Assistant URL. Chỉ dùng địa chỉ HTTPS hợp lệ.");
-      return true;
+      this._status("Home Assistant chưa có URL HTTPS hợp lệ.", "error",
+        "Bạn vẫn có thể ghi âm qua ứng dụng điện thoại và gửi Talk trên HTTP.");
+      return false;
     }
-    // Session guard also catches a misconfigured reverse proxy that returns to
-    // HTTP after a previous redirect. No redirect on other dashboards or startup.
-    const guard = `${STORAGE_PREFIX}https_redirect_attempt`;
-    try {
-      const previous = Number(sessionStorage.getItem(guard) || 0);
-      if (previous > 0 && Date.now() - previous >= 0 && Date.now() - previous < 120000) {
-        this._status("Chuyển sang HTTPS chưa thành công: Home Assistant vẫn mở qua HTTP.", "error",
-          "Kiểm tra HTTPS, Cloudflare Tunnel hoặc reverse proxy và URL tại Settings → System → Network. P2Talk đã dừng chuyển hướng để tránh vòng lặp tải trang.");
-        return true;
-      }
-      sessionStorage.setItem(guard, String(Date.now()));
-    } catch (_) {
-      // Without a persistent guard, an HTTP <-> HTTPS proxy loop is unsafe.
-      this._status("Không thể tự chuyển sang HTTPS an toàn.", "error",
-        "Trình duyệt chặn lưu phiên dùng để chống tải trang lặp. Hãy mở Home Assistant trực tiếp bằng tên miền HTTPS đã cấu hình.");
-      return true;
-    }
-    this._status("Đang chuyển P2Talk sang HTTPS của Home Assistant...", "loading",
-      "Home Assistant sẽ được tải lại một lần tại địa chỉ HTTPS để cho phép dùng micro.");
-    try {
-      window.location.replace(target);
-    } catch (_) {
-      try { sessionStorage.removeItem(guard); } catch (_) { /* ignore */ }
-      this._status("Trình duyệt không cho chuyển sang HTTPS.", "error",
-        "Kiểm tra HTTPS Home Assistant tại Settings → System → Network và quyền điều hướng của ứng dụng.");
-    }
+    window.location.assign(target);
     return true;
   }
 
@@ -1045,18 +1077,22 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._maxBytes = response.max_bytes || this._maxBytes;
       this._haHttpsConfigured = response.mic_https_configured === true;
       this._micHttpsState = response.mic_https_state || "missing";
-      // An insecure HA page cannot capture microphone input. Navigate this
-      // panel to HA's configured HTTPS URL immediately, not on first mic press.
-      // No extra WS calls, preload tasks or navigation from other dashboards.
       this._loaded = true;
-      if (this._autoRedirectToHttps(response.mic_https_panel_url, response.mic_https_candidates)) return;
+      this._micHttpsPanelUrl = selectHttpsPanelUrl(response.mic_https_panel_url, response.mic_https_candidates);
+      const directAvailable = directMicrophoneAvailable();
       const insecure = !window.isSecureContext;
-      const microphoneHelp = this.$("micHelp");
-      microphoneHelp.hidden = !insecure;
-      microphoneHelp.open = insecure;
-      if (insecure) this.$("micAction").textContent = this._haHttpsConfigured
-        ? "Không thể sử dụng micro qua HTTP. P2Talk chỉ tự chuyển khi Home Assistant có URL HTTPS hợp lệ và trình duyệt cho phép điều hướng an toàn."
-        : "Home Assistant chưa có URL HTTPS được khai báo. Vào Settings → System → Network → Home Assistant URL → Internet và lưu tên miền HTTPS hợp lệ.";
+      this.$("httpsOption").hidden = directAvailable || !this._micHttpsPanelUrl;
+      this.$("micHelp").hidden = directAvailable;
+      this.$("micHelp").open = false;
+      this.$("nativeAudioHelp").hidden = directAvailable;
+      this.$("mic").title = directAvailable ? "Nhấn giữ để nói" : "Không thể thu micro trực tiếp tại đây; dùng ghi âm bằng điện thoại / chọn tệp";
+      this.$("mic").setAttribute("aria-label", this.$("mic").title);
+      this.$("micText").innerHTML = directAvailable ? "Nhấn giữ<br>để nói" :
+        insecure ? "Cần HTTPS<br>để giữ nói" : "Micro trực tiếp<br>không khả dụng";
+      this.$("micAction").textContent = directAvailable ? "" :
+        "Giữ để nói trực tiếp không khả dụng trên trang này. Dùng Ghi âm bằng điện thoại / Chọn tệp để phát qua HTTP. Một số điện thoại sẽ mở ứng dụng ghi âm, số khác chỉ cho chọn tệp có sẵn.";
+      this.$("hint").textContent = directAvailable ? "Nhấn giữ để nói" : "Dùng ứng dụng ghi âm hoặc chọn tệp âm thanh";
+      this.$("counter").textContent = directAvailable ? "Thả nút để phát đến loa đã chọn" : "Không cần HTTPS để gửi bản ghi qua HTTP";
       const speakers = Array.isArray(response.speakers) ? response.speakers : [];
       this._configuredSpeakers = speakers;
       const previous = this._selectionInitialized
@@ -1074,17 +1110,14 @@ class P2TalkGoogleCastPanel extends HTMLElement {
       this._syncSpeakerState();
       if (!this._recording && !this._sending) {
         const available = speakers.some((s) => s.is_available);
-        if (insecure) {
-          this._status(this._haHttpsConfigured
-            ? "Micro bị chặn: Home Assistant đang mở bằng HTTP."
-            : "Chưa cấu hình URL HTTPS cho Home Assistant; micro bị chặn trên HTTP.",
-          "error", this.$("micAction").textContent);
-        } else this._status(available && this._selectedSpeakers().length
-          ? "Sẵn sàng. Nhấn giữ micro để nói."
+        const hasSelected = this._selectedSpeakers().length > 0;
+        this._status(available && hasSelected
+          ? directAvailable ? "Sẵn sàng. Nhấn giữ micro để nói."
+            : "Sẵn sàng gửi Talk qua HTTP bằng tệp ghi âm."
           : available ? "Chọn ít nhất một loa để gửi Talk."
           : (speakers.length ? "Các loa đã thêm đều offline/không hỗ trợ phát. Kiểm tra Google Cast."
             : "Chưa có loa. Vào Settings → Devices & services → P2Talk Google Cast → Configure → Add speaker."),
-          available ? "success" : "error");
+        available ? "success" : "error", !directAvailable && hasSelected ? this.$("micAction").textContent : null);
       }
     } catch (error) {
       if (!silent) this._status(`Không đọc được danh sách loa: ${error.message || error}`, "error");
@@ -1179,12 +1212,9 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     const help = this.$("micHelp");
     help.hidden = false;
     help.open = true;
-    const missingHttps = advice.code === "insecure_context" && !this._haHttpsConfigured;
     this.$("micAction").textContent = advice.code === "insecure_context"
-      ? (missingHttps
-        ? "Home Assistant chưa khai báo URL HTTPS. Vào Settings → System → Network → Home Assistant URL → Internet để cấu hình. Sau đó mở Home Assistant bằng chính URL HTTPS này."
-        : "Home Assistant đang mở qua HTTP. P2Talk sẽ tự chuyển sang HTTPS khi mở panel; nếu không chuyển được, hãy kiểm tra HTTPS/Cloudflare Tunnel và thử tải lại panel sau khi sửa cấu hình.")
-      : advice.action;
+      ? "Trên HTTP, chọn Ghi âm bằng điện thoại / Chọn tệp để gửi đến loa. Để nhấn giữ nói trực tiếp, dùng HTTPS hoặc ngữ cảnh được trình duyệt tin cậy."
+      : `${advice.action} Bạn vẫn có thể thử Ghi âm bằng điện thoại / Chọn tệp.`;
     this.$("micCopy").textContent = "Sao chép chẩn đoán";
     let permission = "not available";
     try {
@@ -1208,9 +1238,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     this.$("micDetails").textContent = report;
     // Client-side errors never reach HA Core logs. No recorded sound or URLs logged.
     console.warn("[P2Talk][microphone]", report);
-    this._status(missingHttps
-      ? "Home Assistant chưa cấu hình URL HTTPS cho microphone."
-      : advice.message, "error", this.$("micAction").textContent);
+    this._status(advice.message, "error", this.$("micAction").textContent);
   }
 
   _stopTracks() {
@@ -1285,42 +1313,76 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     else this._stopTracks();
   }
 
+  _resetAudioUploadUi() {
+    this._sending = false;
+    this._recordingSpeakerIds = null;
+    this.$("stage").classList.remove("sending");
+    const direct = directMicrophoneAvailable();
+    this.$("hint").textContent = direct ? "Nhấn giữ để nói" : "Dùng ứng dụng ghi âm hoặc chọn tệp âm thanh";
+    this.$("micText").innerHTML = direct ? "Nhấn giữ<br>để nói" :
+      window.isSecureContext ? "Micro trực tiếp<br>không khả dụng" : "Cần HTTPS<br>để giữ nói";
+    this.$("counter").textContent = direct ? "Thả nút để phát đến loa đã chọn" : "Không cần HTTPS để gửi bản ghi qua HTTP";
+    this._refreshControls();
+  }
+
   async _handleRecordingStopped() {
     this._stopTracks();
     if (this._discard || !this._chunks.length || !this.isConnected) {
       this._chunks = [];
-      this._sending = false;
-      this._recordingSpeakerIds = null;
-      this.$("stage").classList.remove("sending");
-      this.$("hint").textContent = "Nhấn giữ để nói";
-      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
-      this.$("counter").textContent = "Thả nút để phát đến loa đã chọn";
-      this._refreshControls();
+      this._resetAudioUploadUi();
       return;
     }
     const chunks = this._chunks;
     this._chunks = [];
-    const blob = new Blob(chunks, { type:this._recorder?.mimeType || "audio/webm" });
-    if (blob.size > this._maxBytes) {
-      this._sending = false;
-      this._recordingSpeakerIds = null;
-      this._status("Bản ghi âm quá lớn. Hãy ghi ngắn hơn.", "error");
-      this.$("stage").classList.remove("sending");
-      this.$("hint").textContent = "Nhấn giữ để nói";
-      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
-      this._refreshControls();
+    const blob = new Blob(chunks, {type: this._recorder?.mimeType || "audio/webm"});
+    const speakers = this._recordingSpeakerIds || this._selectedSpeakers().map((s) => s.entity_id);
+    await this._sendAudioBlob(blob, blob.type.split(";")[0], speakers);
+  }
+
+  /** File input / native OS audio capture is deliberately an explicit action.
+   * The browser may only provide a file picker; we never claim to access its
+   * microphone directly over HTTP. */
+  async _handleNativeAudio(file) {
+    if (this._sending || this._recording || !this._hass || !this.isConnected) return;
+    const speakers = this._selectedSpeakers().map((speaker) => speaker.entity_id);
+    if (!speakers.length) {
+      this._status("Chọn ít nhất một loa trước khi ghi âm.", "error");
       return;
     }
+    const mime = nativeAudioMime(file);
+    if (!mime) {
+      this._status("Tệp âm thanh chưa được hỗ trợ. Dùng M4A, MP3, WAV, OGG, WebM, AAC, 3GP, AMR, CAF hoặc FLAC.", "error");
+      return;
+    }
+    await this._sendAudioBlob(file, mime, speakers);
+  }
+
+  /** Shared authenticated, bounded upload for direct microphone and files.
+   * Playback still uses the existing per-speaker permission checks server-side. */
+  async _sendAudioBlob(blob, mime, speakers) {
+    if (this._uploadActive) return;
+    if (!blob.size || blob.size > this._maxBytes) {
+      this._status(!blob.size ? "Tệp âm thanh trống." : "Bản ghi quá lớn (giới hạn 8 MB). Hãy ghi ngắn hơn.", "error");
+      this._resetAudioUploadUi();
+      return;
+    }
+    if (!speakers.length || !Object.hasOwn(AUDIO_FILE_MIME, mime)) {
+      this._status("Loa hoặc định dạng âm thanh không hợp lệ.", "error");
+      this._resetAudioUploadUi();
+      return;
+    }
+    this._uploadActive = true;
     this._sending = true;
+    this.$("stage").classList.add("sending");
+    this.$("hint").textContent = "ĐANG GỬI ĐẾN LOA...";
+    this.$("micText").innerHTML = "Đang gửi<br>âm thanh";
     this.$("metrics").textContent = "";
+    this._status("Đang tải và phát bản ghi lên loa đã chọn...", "loading");
     this._refreshControls();
-    const speakers = this._recordingSpeakerIds || this._selectedSpeakers().map((s) => s.entity_id);
     let uploadId = null;
     try {
-      const response = await this._hass.callWS({ type:`${DOMAIN}/upload_start`, mime_type: blob.type.split(";")[0] });
+      const response = await this._hass.callWS({type:`${DOMAIN}/upload_start`, mime_type:mime});
       uploadId = response.upload_id;
-      // A single WebSocket preserves message order; six outstanding replies
-      // avoid one round trip per 48 KiB chunk on mobile Wi-Fi.
       const chunksCount = Math.ceil(blob.size / CHUNK_BYTES);
       for (let batchStart = 0; batchStart < chunksCount; batchStart += UPLOAD_WINDOW) {
         const pending = [];
@@ -1329,7 +1391,7 @@ class P2TalkGoogleCastPanel extends HTMLElement {
           const offset = index * CHUNK_BYTES;
           const part = new Uint8Array(await blob.slice(offset, offset + CHUNK_BYTES).arrayBuffer());
           const data = btoa(String.fromCharCode(...part));
-          pending.push(this._hass.callWS({ type:`${DOMAIN}/upload_chunk`, upload_id:uploadId, index, data }));
+          pending.push(this._hass.callWS({type:`${DOMAIN}/upload_chunk`, upload_id:uploadId, index, data}));
         }
         await Promise.all(pending);
         this.$("counter").textContent = `Đang gửi ${Math.round(until * 100 / chunksCount)}%`;
@@ -1353,17 +1415,12 @@ class P2TalkGoogleCastPanel extends HTMLElement {
     } catch (error) {
       this._status(`Không phát được âm thanh (${error.code || "error"}): ${error.message || error}. Xem Settings → System → Logs.`, "error");
       if (uploadId) {
-        try { await this._hass.callWS({ type:`${DOMAIN}/upload_cancel`, upload_id:uploadId }); }
+        try { await this._hass.callWS({type:`${DOMAIN}/upload_cancel`, upload_id:uploadId}); }
         catch (_) { /* It may already have expired or been consumed. */ }
       }
     } finally {
-      this._sending = false;
-      this._recordingSpeakerIds = null;
-      this.$("stage").classList.remove("sending");
-      this.$("hint").textContent = "Nhấn giữ để nói";
-      this.$("micText").innerHTML = "Nhấn giữ<br>để nói";
-      this.$("counter").textContent = "Thả nút để phát đến loa đã chọn";
-      this._refreshControls();
+      this._uploadActive = false;
+      this._resetAudioUploadUi();
     }
   }
 
