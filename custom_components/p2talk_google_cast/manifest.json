@@ -1,9 +1,6 @@
 {
   "domain": "p2talk_google_cast",
   "name": "P2Talk Google Cast",
-  "version": "1.4.1",
-  "documentation": "https://github.com/khaisilk1910/P2Talk-Google-Cast#readme",
-  "issue_tracker": "https://github.com/khaisilk1910/P2Talk-Google-Cast/issues",
   "codeowners": [
     "@khaisilk1910"
   ],
@@ -14,8 +11,11 @@
     "lovelace",
     "media_source"
   ],
+  "documentation": "https://github.com/khaisilk1910/P2Talk-Google-Cast#readme",
   "integration_type": "service",
-  "single_config_entry": true,
   "iot_class": "local_push",
-  "requirements": []
+  "issue_tracker": "https://github.com/khaisilk1910/P2Talk-Google-Cast/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "1.4.2"
 }

@@ -749,14 +749,21 @@ h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; mar
 @media (max-width:430px) { .head { gap:8px; } .hero-speaker { width:115px; } .speaker-summary-text { padding-right:33px; } }
 
 `;
-// Parse styles only once, not separately for each Lovelace card.
-let sharedSheet = null;
-try {
-  if (typeof CSSStyleSheet !== "undefined") {
-    sharedSheet = new CSSStyleSheet();
-    sharedSheet.replaceSync(styles);
-  }
-} catch (_) { sharedSheet = null; }
+// Do not parse the large stylesheet on dashboards that do not contain P2Talk.
+// Resources are global in Lovelace; pay the CSS cost only when a card is mounted.
+let sharedSheet;
+function getSharedSheet() {
+  if (sharedSheet !== undefined) return sharedSheet;
+  sharedSheet = null;
+  try {
+    if (typeof CSSStyleSheet !== "undefined") {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(styles);
+      sharedSheet = sheet;
+    }
+  } catch (_) { sharedSheet = null; }
+  return sharedSheet;
+}
 
 const waveMarkup = () => `<div class="wave" aria-hidden="true">${[14,27,44,67,35,57,84,48,62,37,75,102,65,46,58,31,18].map((n,i)=>`<span style="--h:${n}px;--delay:${(i*.07).toFixed(2)}s"></span>`).join("")}</div>`;
 
@@ -832,7 +839,8 @@ class P2TalkGoogleCastCard extends HTMLElement {
   _speakerSignature() {
     return this._configuredSpeakers.map((s) => {
       const state = this._hass?.states?.[s.entity_id];
-      return `${s.entity_id}:${state?.state}:${state?.attributes?.supported_features}`;
+      // Only track properties relevant to speaker controls and feedback.
+      return `${s.entity_id}:${state?.state}:${state?.attributes?.supported_features}:${state?.attributes?.volume_level}:${state?.attributes?.friendly_name}`;
     }).join("|");
   }
   _secureMicrophoneOrigin() {
@@ -869,12 +877,16 @@ class P2TalkGoogleCastCard extends HTMLElement {
   }
 
   connectedCallback() {
+    // Lovelace can disconnect/reconnect the same card when editing or moving it.
+    // The DOM is rebuilt below, so fetch fresh speakers and restore selections.
+    this._loaded = false;
+    this._speakerStateSignature = null;
     if (this._compact) this.setAttribute("data-compact", "true");
     // One parsed stylesheet shared across all instances; no per-card CSS parse.
-    if (sharedSheet && "adoptedStyleSheets" in this.shadowRoot) {
-      this.shadowRoot.adoptedStyleSheets = [sharedSheet];
-    }
-    this.shadowRoot.innerHTML = (sharedSheet ? "" : `<style>${styles}</style>`) +
+    const sheet = getSharedSheet();
+    const canAdopt = !!sheet && "adoptedStyleSheets" in this.shadowRoot;
+    if (canAdopt) this.shadowRoot.adoptedStyleSheets = [sheet];
+    this.shadowRoot.innerHTML = (canAdopt ? "" : `<style>${styles}</style>`) +
       (this._compact ? `
       <ha-card class="surface">
         <section class="section speaker-section" aria-label="Chọn loa Google Cast">
@@ -1004,11 +1016,14 @@ class P2TalkGoogleCastCard extends HTMLElement {
     if (this._timer) clearInterval(this._timer);
     this._timer = null;
     this._pressed = false;
+    this._recording = false;
     if (this._recorder && this._recorder.state !== "inactive") {
       this._discard = true;
       this._recorder.stop();
     }
     this._stopTracks();
+    // Detaching a card must never leave it permanently stuck in a recording state.
+    this._sending = false;
   }
 
   _status(message, type = "", note = null) {
@@ -1039,6 +1054,13 @@ class P2TalkGoogleCastCard extends HTMLElement {
     const playSupported = typeof flags === "number" ? !!(flags & 512) : speaker.is_available;
     const allowed = speaker.can_control === undefined ? speaker.is_available : speaker.can_control;
     return !!allowed && !!playSupported && state !== "unavailable" && state !== "unknown";
+  }
+
+  _speakerDisplayName(speaker) {
+    // Respect an alias set in the Options Flow, otherwise use the latest HA name.
+    if (speaker.configured_name) return speaker.configured_name;
+    return this._hass?.states?.[speaker.entity_id]?.attributes?.friendly_name ||
+      speaker.friendly_name || speaker.entity_id;
   }
 
   _selectedSpeakers() {
@@ -1122,7 +1144,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
       checkbox.disabled = !this._speakerAvailable(speaker);
       const text = document.createElement("span");
       text.className = "speaker-option-name";
-      text.textContent = speaker.friendly_name;
+      text.textContent = this._speakerDisplayName(speaker);
       const state = document.createElement("small");
       state.textContent = checkbox.disabled ? "Offline / không hỗ trợ phát" : "Sẵn sàng";
       row.append(checkbox, text, state);
@@ -1166,7 +1188,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
     if (!this.$ || !this.$("speaker")) return;
     const speakers = this._selectedSpeakers();
     const count = speakers.length;
-    const names = speakers.map((s) => s.friendly_name);
+    const names = speakers.map((s) => this._speakerDisplayName(s));
     this.$("speakerSummaryText").textContent = count === 0 ? "Chọn một hoặc nhiều loa..."
       : count === 1 ? names[0]
       : count === 2 ? names.join(" + ")
@@ -1346,7 +1368,10 @@ class P2TalkGoogleCastCard extends HTMLElement {
       uploadId = null;
       const sent = result.speakers || (result.speaker ? [result.speaker] : []);
       const failures = result.failed_speakers || [];
-      const speakerNames = sent.map((id) => this._configuredSpeakers.find((s) => s.entity_id === id)?.friendly_name || id);
+      const speakerNames = sent.map((id) => {
+        const speaker = this._configuredSpeakers.find((s) => s.entity_id === id);
+        return speaker ? this._speakerDisplayName(speaker) : id;
+      });
       this._status(failures.length
         ? `Đã gửi đến ${sent.length}/${speakers.length} loa. ${failures.length} loa không phát được.`
         : `Đã gửi giọng nói đến ${speakerNames.length === 1 ? speakerNames[0] : `${sent.length} loa đã chọn`}.`,
@@ -1468,8 +1493,8 @@ if (!customElements.get("p2talk-google-cast-editor"))
 
 window.customCards = window.customCards || [];
 for (const definition of [
-  {type:"p2talk-google-cast-card",name:"P2Talk Google Cast — Full",description:"Ghi âm, phát và dừng Google Cast; toàn bộ giao diện P2Talk.",preview:false},
-  {type:"p2talk-google-cast-compact-card",name:"P2Talk Google Cast — Compact",description:"Chọn loa, âm lượng và nhấn giữ để nói.",preview:false},
+  {type:"p2talk-google-cast-card",name:"P2Talk Google Cast — Full",description:"Ghi âm, phát và dừng Google Cast; toàn bộ giao diện P2Talk.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
+  {type:"p2talk-google-cast-compact-card",name:"P2Talk Google Cast — Compact",description:"Chọn loa, âm lượng và nhấn giữ để nói.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
 ]) {
   if (!window.customCards.some((card) => card.type === definition.type))
     window.customCards.push(definition);

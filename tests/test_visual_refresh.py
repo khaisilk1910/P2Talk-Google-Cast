@@ -1,23 +1,24 @@
-"""Speaker identity and UX safe visual invariants."""
+"""Visual layout and assets retained for Full, independent Compact markup."""
 from pathlib import Path
 import unittest
 
-ROOT = Path(__file__).resolve().parents[1] / "custom_components/p2talk_google_cast/frontend"
-class VisualRefreshTests(unittest.TestCase):
-    def test_2026_speaker_asset_and_header(self):
-        js = (ROOT / "panel.js").read_text()
-        img = ROOT / "home-speaker-2026.webp"
-        self.assertTrue(img.exists())
-        self.assertLess(img.stat().st_size, 60_000)
-        self.assertIn('class="mark-speaker"', js)
-        self.assertIn('class="mark-cast"', js)
-        self.assertNotIn('<div class="symbol">${mark}</div>', js)
-    def test_live_controls_and_aurora_rendering(self):
-        js = (ROOT / "panel.js").read_text()
-        for needle in ('id="cancel"', 'id="stop"', 'class="action cancel-action"',
-                       'class="action stop-action"', '.panel-body', '.hero-glow',
-                       'prefers-reduced-motion', 'stage.recording', 'stage.sending',
-                       'id="speaker"', 'id="mic"', 'hass.callWS'):
-            self.assertIn(needle, js)
+FRONTEND = Path(__file__).resolve().parents[1] / 'custom_components/p2talk_google_cast/frontend'
+
+class VisualTests(unittest.TestCase):
+    def test_full_artwork_and_controls(self):
+        js = (FRONTEND / 'cards.js').read_text()
+        self.assertLess((FRONTEND / 'home-speaker-2026.webp').stat().st_size, 60_000)
+        for token in ('class="mark-speaker"', 'class="mark-cast"',
+                      'class="action cancel-action"', 'class="action stop-action"',
+                      '.panel-body', 'class="hero-glow"', 'waveMarkup()',
+                      'stage.recording', 'stage.sending'):
+            self.assertIn(token, js)
+    def test_compact_contains_only_three_primary_controls(self):
+        js = (FRONTEND / 'cards.js').read_text()
+        small = js.split('(this._compact ? `', 1)[1].split('` : `', 1)[0]
+        for token in ('id="speaker"', 'id="volume"', 'id="mic"', 'https-notice'):
+            self.assertIn(token, small)
+        for excluded in ('id="stop"', 'id="cancel"', 'hero-speaker', 'waveMarkup()'):
+            self.assertNotIn(excluded, small)
 
 if __name__ == '__main__': unittest.main()

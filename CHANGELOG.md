@@ -1,3 +1,41 @@
+## 1.4.2 — 2026-11-07
+
+- **Fix blocking event-loop I/O:** Resource enrollment now uses `homeassistant.loader.async_get_integration()` and the cached manifest version, rather than `Path.read_text()` at runtime. It runs only after Home Assistant starts (or in a background task when installed via Marketplace after startup).
+- Improved resource enrollment logs and added `resource_registration` status to diagnostics (pending/registered/updated/already_registered/yaml_mode/failed).
+- Enable HTTP caching of static assets; the auto-registered module URL retains version-based cache busting.
+- Lazily compile shared CSS only when a P2Talk card is actually mounted, not when Lovelace loads its Resources globally.
+- Fix Lovelace card disconnect/reconnect state during dashboard editing, and track speaker volume/name changes without watching unrelated entities.
+- Include documentation links in the Lovelace UI card picker and clarify installation via Home Assistant 2026.11 Marketplace or legacy HACS.
+- Add regression tests for cached manifest lookup, zero blocking manifest I/O, resource state, startup/unload lifecycle, native Options Flow callback, and card remount.
+- Keep Marketplace enrollment asynchronous and bound to the Config Entry lifetime; preserve user Resources in storage mode and leave YAML-managed Resources untouched.
+
+# Changelog — P2Talk Google Cast
+
+## 1.4.1 — 2026-11-03
+
+- Sửa `ImportError` khi tải `config_flow.py`: khai báo hằng số `NAME` dùng cho tên config entry, vốn bị thiếu ở bản 1.4.0. Lỗi làm Home Assistant hiển thị `Config flow could not be loaded: Invalid handler specified`.
+- Thêm bài kiểm thử nhập thực tế module `config_flow.py` trong một môi trường Home Assistant mô phỏng, bao gồm bước thiết lập tích hợp từ UI để ngăn lỗi import tương tự trong bản phát hành sau.
+- Giữ nguyên tự đăng ký Lovelace Resources, thẻ UI Full/Compact và cơ chế ghi âm, HTTPS và dừng loa.
+
+## 1.4.0 — 2026-11-03
+
+- **Tự đăng ký Lovelace Resource:** thêm/cập nhật module `/p2talk_google_cast_assets/cards.js?v=1.4.0` trong chế độ Resources mặc định (storage); không còn yêu cầu người dùng thêm JS thủ công.
+- **Thêm thẻ trực tiếp trong UI:** lựa chọn Full và Compact có sẵn trong card picker; sử dụng visual editor để đặt tên và chọn loa, không cần YAML.
+- Đăng ký sau sự kiện Home Assistant started hoặc chạy nền nếu HA đã hoạt động để không chặn startup. Luôn kiểm tra resource collection đã được nạp trước khi ghi, tránh làm mất Resources của người dùng trên bản HA cũ.
+- Giữ nguyên ID resource đã được thêm ở 1.3.0; chống race giữa các lần tải lại để không tạo bản trùng, không chỉnh tài nguyên của thẻ khác và không đụng vào YAML resource mode.
+
+## 1.3.0 — 2026-11-03
+
+- Bỏ hoàn toàn sidebar panel, thay bằng hai custom card Lovelace: `p2talk-google-cast-card` (Full) và `p2talk-google-cast-compact-card` (Compact).
+- Thêm trình chỉnh sửa thẻ trực quan, tương thích giao diện sáng/tối, Sections và các dashboard Lovelace chuẩn; sử dụng Shadow DOM và một stylesheet chia sẻ.
+- Tài nguyên JavaScript được đăng ký thủ công một lần qua Dashboard Resources; tích hợp không sửa cấu hình dashboard và không tải mã thẻ khi Home Assistant khởi động.
+- Không tự điều hướng HTTP sang HTTPS; vô hiệu hóa nút micro và hiện giải thích trực tiếp trên cả hai loại thẻ khi HTTP hoặc không phải secure context.
+- Sửa “Dừng các loa” dùng `media_player.media_stop` đúng API action Home Assistant với `target.entity_id`; kiểm tra quyền/feature, có phương án `media_pause`, và xử lý lỗi từng loa.
+- Bổ sung kiểm thử Python, Node.js và trình duyệt (mô phỏng Home Assistant); chưa xác minh phần cứng Cast thực tế.
+- Những mục “Unreleased” bên dưới là nhật ký phát triển của bản sidebar trước đó, không còn mô tả hành vi phiên bản 1.3.0.
+
+---
+
 ## Unreleased — Aurora Visual Refresh
 - Header speaker artwork, unified aurora background and action button improvements.
 

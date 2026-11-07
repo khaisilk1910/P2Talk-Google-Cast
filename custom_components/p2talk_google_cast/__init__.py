@@ -31,22 +31,23 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
             entry, options={key: val for key, val in entry.options.items() if key != "mic_https_url"}
         )
     runtime = Runtime(entry)
+    hass.data[f"{DOMAIN}_lovelace_resource_status"] = {"result": "pending"}
     hass.data[DOMAIN] = runtime
     if not hass.data.get(_ASSETS_REGISTERED):
         await hass.http.async_register_static_paths([
             StaticPathConfig(
                 f"/{DOMAIN}_assets",
                 str(Path(__file__).parent / "frontend"),
-                cache_headers=False,  # Browser can reload a new cards.js after upgrade.
+                cache_headers=True,  # Versioned Resource URL invalidates long-lived browser cache.
             )
         ])
         hass.data[_ASSETS_REGISTERED] = True
     register_commands(hass)
 
     if hass.state == CoreState.running:
-        # This is a short background operation; do not block entry setup.
-        hass.async_create_task(
-            async_register_card_resource(hass),
+        # Schedule enrollment outside setup; manifest metadata is loader-cached.
+        entry.async_create_background_task(
+            hass, async_register_card_resource(hass),
             f"{DOMAIN} register Lovelace resource",
         )
     else:

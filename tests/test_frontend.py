@@ -1,82 +1,85 @@
-"""Lightweight UI/brand packaging invariants (works without browser dependencies)."""
+"""Lovelace card packaging and zero-dashboard-mutation invariants."""
 from pathlib import Path
 import struct
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENT = ROOT / 'custom_components' / 'p2talk_google_cast'
+COMPONENT = ROOT / "custom_components" / "p2talk_google_cast"
 
 
-class FrontendAssetsTests(unittest.TestCase):
-    def test_icons_have_correct_square_dimensions(self):
-        for filename, dimension in (('icon.png', 256), ('icon@2x.png', 512)):
-            content = (COMPONENT / 'brand' / filename).read_bytes()
-            self.assertTrue(content.startswith(b'\x89PNG\r\n\x1a\n'))
-            self.assertEqual(struct.unpack('>II', content[16:24]), (dimension, dimension))
+class LovelaceCardTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.js = (COMPONENT / "frontend" / "cards.js").read_text(encoding="utf-8")
+        cls.setup = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
+        cls.backend = (COMPONENT / "websocket.py").read_text(encoding="utf-8")
 
-    def test_accessibility_and_theme_support(self):
-        source = (COMPONENT / 'frontend' / 'panel.js').read_text()
-        for text in ('--primary-color', '--card-background-color',
-                     '--primary-text-color', 'prefers-reduced-motion',
-                     'pointerdown', 'pointerup', 'pointercancel',
-                     'aria-live', 'focus-visible', 'localStorage'):
-            with self.subTest(needle=text):
-                self.assertIn(text, source)
-        self.assertIn('background:transparent', source)
-        self.assertNotIn('https://fonts.', source)
-        self.assertNotIn('http://', source)
+    def test_resources_not_panels(self):
+        self.assertTrue((COMPONENT / "frontend" / "cards.js").is_file())
+        self.assertFalse((COMPONENT / "frontend" / "panel.js").exists())
+        self.assertNotIn("panel_custom", self.setup)
+        self.assertNotIn("async_register_panel", self.setup)
+        self.assertIn("async_register_card_resource", self.setup)
+        self.assertIn('cache_headers=True', self.setup)
+        self.assertIn('StaticPathConfig', self.setup)
 
-    def test_speaker_selection_is_still_configured_from_backend(self):
-        source = (COMPONENT / 'frontend' / 'panel.js').read_text()
-        self.assertIn('`${DOMAIN}/speakers`', source)
-        self.assertIn('`${DOMAIN}/upload_finish`', source)
-        self.assertIn('`${DOMAIN}/stop`', source)
-        self.assertIn('/config/integrations/integration/p2talk_google_cast', source)
+    def test_automatic_resource_is_safe_and_async(self):
+        registrar = (COMPONENT / "lovelace_resources.py").read_text(encoding="utf-8")
+        self.assertIn('resource_mode != "storage"', registrar)
+        self.assertIn('await resources.async_get_info()', registrar)
+        self.assertIn('if not getattr(resources, "loaded", False)', registrar)
+        self.assertIn('async_create_item', registrar)
+        self.assertIn('async_update_item', registrar)
+        self.assertIn('CARD_RESOURCE_PATH', registrar)
+        self.assertIn('async_get_integration(hass, DOMAIN)', registrar)
+        self.assertNotIn('read_text(', registrar)
+        self.assertNotIn('Path(', registrar)
+        self.assertIn('EVENT_HOMEASSISTANT_STARTED', self.setup)
+        self.assertIn('entry.async_create_background_task', self.setup)
+        self.assertNotIn('async_register_panel', self.setup)
+        self.assertNotIn('frontend.add_extra_js_url', self.setup)
 
-    def test_no_promotional_feature_tiles(self):
-        """Keep the panel focused on speaker selection and Push-to-Talk."""
-        source = (COMPONENT / 'frontend' / 'panel.js').read_text()
-        for label in ('Truyền nhanh', 'Bảo mật', 'Tiết kiệm tài nguyên', 'Tương thích tốt'):
-            with self.subTest(label=label):
-                self.assertNotIn(label, source)
-        self.assertNotIn('feature-grid', source)
-        self.assertNotIn('feature-card', source)
-        self.assertIn('<section class="stage"', source)
-        self.assertIn('<div class="actions">', source)
+    def test_two_cards_and_new_ha_editor_interfaces(self):
+        for token in ('p2talk-google-cast-card', 'p2talk-google-cast-compact-card',
+                      'window.customCards', 'getConfigElement()', 'getStubConfig()',
+                      'documentationURL',
+                      'getGridOptions()', 'getCardSize()', 'setConfig(config)',
+                      'this.setAttribute("data-compact", "true")',
+                      'config-changed', '<ha-card class="surface">'):
+            with self.subTest(token=token): self.assertIn(token, self.js)
 
-    def test_concept_match_is_real_functional_ui(self):
-        """Decorative artwork must not replace live controls or require cloud assets."""
-        source = (COMPONENT / 'frontend' / 'panel.js').read_text()
-        asset = COMPONENT / 'frontend' / 'home-speaker-2026.webp'
-        self.assertTrue(asset.exists())
-        self.assertLess(asset.stat().st_size, 32 * 1024)
-        self.assertIn('home-speaker-2026.webp', source)
-        for identifier in ('id="speaker"', 'id="volume"', 'id="mic"',
-                           'id="cancel"', 'id="stop"', 'id="status"',
-                           'id="connectionPill"', 'id="inlineState"'):
-            with self.subTest(identifier=identifier):
-                self.assertIn(identifier, source)
-        self.assertIn('hass.themes.darkMode', source)
-        self.assertIn(':host([data-dark="true"])', source)
-        self.assertIn('waveMarkup()', source)
+    def test_http_is_disabled_inline_without_navigating(self):
+        self.assertIn('window.location.protocol === "https:"', self.js)
+        self.assertIn('data-insecure', self.js)
+        self.assertIn('!this._secureMicrophoneOrigin() ||', self.js)
+        self.assertIn('P2Talk không tự chuyển', self.js)
+        self.assertNotIn('window.location.replace', self.js)
+        self.assertNotIn('sessionStorage', self.js)
+        self.assertNotIn('mic_https_panel_url', self.backend)
+        self.assertNotIn('secure_url', self.backend)
 
-    def test_early_https_redirect_lives_only_in_lazy_panel(self):
-        source = (COMPONENT / 'frontend' / 'panel.js').read_text()
-        start = source.index('async _loadSpeakers(')
-        end = source.index('  _applySpeakerVolume()', start)
-        panel_load = source[start:end]
-        self.assertIn('this._openSecurePanel()', panel_load)
-        self.assertIn('window.isSecureContext', panel_load)
-        self.assertEqual(panel_load.count('this._hass.callWS'), 1)
-        self.assertIn('window.location.replace(target)', source)
-        setup = (COMPONENT / '__init__.py').read_text()
-        self.assertNotIn('configured_https_panel', setup)
+    def test_isolated_and_inexpensive_lovelace_runtime(self):
+        for token in ('attachShadow', 'CSSStyleSheet', 'adoptedStyleSheets',
+                      '_speakerSignature()', 'if (signature !== this._speakerStateSignature)',
+                      'loading="lazy"', 'document.removeEventListener',
+                      'getSharedSheet()', 'function getSharedSheet()',
+                      'prefers-reduced-motion', 'localStorage'):
+            with self.subTest(token=token): self.assertIn(token, self.js)
+        self.assertNotIn('customElements.define("p2talk-google-cast-panel"', self.js)
+        self.assertNotIn('https://fonts.', self.js)
 
-    def test_panel_asset_cache_is_busted_on_update(self):
-        source = (COMPONENT / '__init__.py').read_text()
-        self.assertIn('stat().st_mtime_ns', source)
-        self.assertIn('module_url=f"/{DOMAIN}_assets/panel.js?v={panel_asset_version}"', source)
+    def test_live_controls_and_recording_api(self):
+        for token in ('id="speaker"', 'id="volume"', 'id="mic"',
+                      'id="stop"', 'id="cancel"', 'id="micHelp"',
+                      '`${DOMAIN}/speakers`', '`${DOMAIN}/upload_finish`',
+                      '`${DOMAIN}/stop`', 'pointerdown', 'pointerup',
+                      'pointercancel', 'aria-live'):
+            with self.subTest(token=token): self.assertIn(token, self.js)
 
+    def test_icons(self):
+        for filename, dimension in (("icon.png", 256), ("icon@2x.png", 512)):
+            raw = (COMPONENT / "brand" / filename).read_bytes()
+            self.assertTrue(raw.startswith(b"\x89PNG\r\n\x1a\n"))
+            self.assertEqual(struct.unpack(">II", raw[16:24]), (dimension, dimension))
 
-if __name__ == '__main__':
-    unittest.main()
+if __name__ == "__main__": unittest.main()

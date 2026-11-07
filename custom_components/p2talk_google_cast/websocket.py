@@ -149,6 +149,7 @@ def ws_speakers(hass: HomeAssistant, connection, msg) -> None:
         speakers.append({
             "entity_id": entity_id,
             "friendly_name": item["name"] or (state.name if state else entity_id),
+            "configured_name": item["name"],
             "state": state.state if state else "not_found",
             "is_available": available and bool(features & MediaPlayerEntityFeature.PLAY_MEDIA),
             "can_control": _can_control(connection, entity_id),
@@ -414,6 +415,10 @@ async def ws_stop(hass: HomeAssistant, connection, msg) -> None:
     paused = [entity for entity, result in results if result == "paused"]
     already = [entity for entity, result in results if result == "already_stopped"]
     failed = [entity for entity, result in results if result not in ("stopped", "already_stopped", "paused")]
+    if failed:
+        _LOGGER.warning("P2Talk stop: %d/%d speaker(s) could not be stopped; reasons=%s",
+                        len(failed), len(entities),
+                        {entity: reason for entity, reason in results if entity in failed})
     if not succeeded:
         connection.send_error(
             msg["id"], "stop_failed",
