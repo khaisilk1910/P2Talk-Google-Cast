@@ -5,6 +5,7 @@
  */
 
 const DOMAIN = "p2talk_google_cast";
+const DEFAULT_TTS_ENTITY = "tts.wyoming_vietnamese";
 const CHUNK_BYTES = 48 * 1024;
 const UPLOAD_WINDOW = 6; // amortize Wi-Fi/WebSocket RTT while keeping ordering
 const MAX_TARGET_SPEAKERS = 32;
@@ -32,6 +33,7 @@ const glyphs = {
   speaker: '<rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="14" r="3.5"/><circle cx="12" cy="7.5" r=".65" fill="currentColor" stroke="none"/>',
   volume: '<path d="M11 5 6 9H3v6h3l5 4V5Zm4 4a5 5 0 0 1 0 6m3-9a9 9 0 0 1 0 12"/>',
   refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 9a7 7 0 0 1 12-2l2 5M4 12l2 5a7 7 0 0 0 12-2"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/>',
   stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
@@ -748,6 +750,30 @@ h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; mar
 :host([data-compact="true"]) .select-wrap > summary { min-height:48px; }
 @media (max-width:430px) { .head { gap:8px; } .hero-speaker { width:115px; } .speaker-summary-text { padding-right:33px; } }
 
+/* Text-to-speech controls: also available on HTTP where microphone is disabled. */
+.tts-section { margin-top:18px; padding:16px; border:1px solid var(--pt-border); border-radius:15px; background:var(--pt-tint); }
+.tts-heading { margin:0 0 11px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:14px; font-weight:800; color:var(--pt-ink); }
+.tts-heading .svg-icon { width:19px; height:19px; color:var(--pt-primary); }
+.tts-caption { margin:0 0 9px; font-size:11px; color:var(--pt-muted); overflow-wrap:anywhere; }
+.tts-text { display:block; resize:vertical; width:100%; min-height:92px; padding:12px 13px; border-radius:11px; border:1px solid var(--pt-border); background:var(--pt-card); color:var(--pt-ink); font:inherit; font-size:14px; line-height:1.55; }
+.tts-text:focus-visible, .tts-option-input:focus-visible { outline:2px solid var(--pt-primary); outline-offset:2px; }
+.tts-text::placeholder, .tts-option-input::placeholder { color:var(--pt-muted); opacity:.82; }
+.tts-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; margin-top:10px; }
+.tts-send { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:40px; border:0; border-radius:10px; padding:10px 17px; color:#fff; background:var(--pt-primary); font:inherit; font-size:13px; font-weight:750; cursor:pointer; }
+.tts-send .svg-icon { width:17px; height:17px; }
+.tts-send:hover:not(:disabled) { filter:brightness(1.08); }
+.tts-send:disabled { opacity:.48; cursor:not-allowed; }
+.tts-advanced { min-width:0; font-size:12px; color:var(--pt-muted); }
+.tts-advanced > summary { cursor:pointer; padding:9px 2px; font-weight:700; }
+.tts-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:9px 0 4px; }
+.tts-options label { display:block; min-width:0; font-size:12px; color:var(--pt-ink); font-weight:650; }
+.tts-option-input { margin-top:5px; width:100%; min-width:0; padding:9px 11px; border:1px solid var(--pt-border); border-radius:9px; color:var(--pt-ink); background:var(--pt-card); font:inherit; font-size:13px; }
+.tts-option-note { display:block; font-size:11px; line-height:1.5; margin-top:8px; color:var(--pt-muted); }
+:host([data-compact="true"]) .tts-section { padding:12px; margin:12px 0 0; }
+:host([data-compact="true"]) .tts-heading { font-size:12px; }
+:host([data-compact="true"]) .tts-text { min-height:76px; }
+@media (max-width:390px) { .tts-options { grid-template-columns:1fr; } .tts-actions { align-items:stretch; } .tts-send { width:100%; } }
+
 `;
 // Do not parse the large stylesheet on dashboards that do not contain P2Talk.
 // Resources are global in Lovelace; pay the CSS cost only when a card is mounted.
@@ -767,6 +793,25 @@ function getSharedSheet() {
 
 const waveMarkup = () => `<div class="wave" aria-hidden="true">${[14,27,44,67,35,57,84,48,62,37,75,102,65,46,58,31,18].map((n,i)=>`<span style="--h:${n}px;--delay:${(i*.07).toFixed(2)}s"></span>`).join("")}</div>`;
 
+function ttsMarkup() {
+  return `<section class="tts-section" aria-label="Chuyển văn bản thành giọng nói">
+    <h2 class="tts-heading">${icon("send")} Nhập văn bản để phát TTS</h2>
+    <p class="tts-caption" id="ttsEngineLabel"></p>
+    <label for="ttsText" class="tts-caption">Nội dung cần đọc</label>
+    <textarea id="ttsText" class="tts-text" rows="3" maxlength="2000" placeholder="Nhập nội dung muốn TTS..." aria-label="Nhập nội dung muốn TTS"></textarea>
+    <div class="tts-actions">
+      <details class="tts-advanced" id="ttsAdvanced"><summary>Tuỳ chọn nâng cao: Language / Voice</summary>
+        <div class="tts-options">
+          <label for="ttsLanguage">Language (không bắt buộc)<input id="ttsLanguage" class="tts-option-input" type="text" maxlength="40" placeholder="Ví dụ: vi" autocomplete="off" /></label>
+          <label for="ttsVoice">Voice (không bắt buộc)<input id="ttsVoice" class="tts-option-input" type="text" maxlength="100" placeholder="Ví dụ: maichi" autocomplete="off" /></label>
+        </div>
+        <small class="tts-option-note">Để trống để dùng mặc định của bộ TTS. Chỉ gửi các trường đã nhập.</small>
+      </details>
+      <button type="button" id="ttsSend" class="tts-send" disabled>${icon("send")}<span id="ttsSendLabel">Gửi TTS đến loa</span></button>
+    </div>
+  </section>`;
+}
+
 class P2TalkGoogleCastCard extends HTMLElement {
   constructor() {
     super();
@@ -781,6 +826,10 @@ class P2TalkGoogleCastCard extends HTMLElement {
     this._recording = false;
     this._pressed = false;
     this._sending = false;
+    this._ttsSending = false;
+    this._ttsText = "";
+    this._ttsLanguage = "";
+    this._ttsVoice = "";
     this._discard = false;
     this._recorder = null;
     this._stream = null;
@@ -807,13 +856,14 @@ class P2TalkGoogleCastCard extends HTMLElement {
     if (preferencesChanged) this._selectionInitialized = false;
     this._applyTitle();
     // A Lovelace editor can update an existing card without remounting it.
-    if (this.isConnected && this._loaded && !this._recording && !this._sending) {
+    if (this.isConnected && this._loaded && !this._recording && !this._sending && !this._ttsSending) {
       this._applyConfiguredSpeakers();
     }
+    this._applyTtsConfig();
   }
   static getConfigElement() { return document.createElement("p2talk-google-cast-editor"); }
   static getStubConfig() { return {}; }
-  getCardSize() { return this._compact ? 5 : 12; }
+  getCardSize() { return this._compact ? 8 : 15; }
   getGridOptions() { return this._compact
     ? { columns:6, min_columns:6 }
     : { columns:12, min_columns:6 }; }
@@ -863,6 +913,12 @@ class P2TalkGoogleCastCard extends HTMLElement {
     const title = this.shadowRoot?.getElementById(this._compact ? "compactTitle" : "fullTitle");
     if (title) title.textContent = label || "P2Talk Google Cast";
   }
+  _applyTtsConfig() {
+    const target = typeof this._config.tts_entity === "string" && this._config.tts_entity.trim()
+      ? this._config.tts_entity.trim() : DEFAULT_TTS_ENTITY;
+    const label = this.shadowRoot?.getElementById("ttsEngineLabel");
+    if (label) label.textContent = `Bộ TTS: ${target} · Phát trên loa đang chọn`;
+  }
   _applyConfiguredSpeakers() {
     const available = new Set(this._configuredSpeakers.filter((s) => this._speakerAvailable(s)).map((s) => s.entity_id));
     const preferred = this._selectionInitialized ? [...this._selectedSpeakerIds]
@@ -872,7 +928,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
     this._selectionInitialized = true;
     this._selectedSpeakerIds = new Set(selected);
     this._renderSpeakerOptions();
-    if (!this._recording && !this._sending) this._applySpeakerVolume();
+    if (!this._recording && !this._sending && !this._ttsSending) this._applySpeakerVolume();
     this._syncSpeakerState();
   }
 
@@ -901,7 +957,8 @@ class P2TalkGoogleCastCard extends HTMLElement {
           <div class="volume-box">${icon("volume")}<input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng phát" style="--progress:65%"/><output id="volumeText" for="volume">65%</output></div>
         </section>
         <section class="stage" id="stage" aria-label="Nhấn giữ để nói"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br/>để nói</span></button><p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát</div></section>
-        <div class="https-notice" id="httpsNotice" role="note">Không thể ghi âm qua HTTP. Hãy truy cập Home Assistant bằng HTTPS hợp lệ để bật nút micro. P2Talk không tự chuyển trang.</div>
+        ${ttsMarkup()}
+        <div class="https-notice" id="httpsNotice" role="note">Không thể ghi âm qua HTTP. Hãy truy cập Home Assistant bằng HTTPS hợp lệ để bật nút micro. Tính năng nhập văn bản TTS vẫn hoạt động. P2Talk không tự chuyển trang.</div>
         <div id="status" class="compact-status" role="status" aria-live="polite"></div>
         <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro</summary><p id="micAction"></p><pre id="micDetails"></pre><button id="micCopy" type="button">Sao chép chẩn đoán</button></details>
       </ha-card>` : `
@@ -932,7 +989,8 @@ class P2TalkGoogleCastCard extends HTMLElement {
           <div class="mic-layout">${waveMarkup()}<div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br/>để nói</span></button></div>${waveMarkup()}</div>
           <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát đến loa đã chọn</div>
         </section>
-        <div class="https-notice" id="httpsNotice" role="note">Microphone chỉ hoạt động khi truy cập Home Assistant bằng HTTPS. Bạn đang mở qua HTTP; hãy mở dashboard bằng URL HTTPS hợp lệ. P2Talk sẽ không tự chuyển trang.</div>
+        ${ttsMarkup()}
+        <div class="https-notice" id="httpsNotice" role="note">Microphone chỉ hoạt động khi truy cập Home Assistant bằng HTTPS. Bạn đang mở qua HTTP; hãy mở dashboard bằng URL HTTPS hợp lệ. Tính năng nhập văn bản TTS vẫn hoạt động. P2Talk sẽ không tự chuyển trang.</div>
         <div class="actions"><button type="button" class="action cancel-action" id="cancel" disabled>${icon("close")} Hủy</button>
         <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng các loa</button></div>
         <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><div class="status-copy"><strong id="statusText" class="status-content">Đang kết nối Home Assistant...</strong><small id="statusNote">Đang kiểm tra quyền truy cập và thiết bị.</small></div><span class="status-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
@@ -948,6 +1006,17 @@ class P2TalkGoogleCastCard extends HTMLElement {
       </ha-card></div>`);
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this._applyTitle();
+    this._applyTtsConfig();
+    this.$("ttsText").value = this._ttsText;
+    this.$("ttsLanguage").value = this._ttsLanguage;
+    this.$("ttsVoice").value = this._ttsVoice;
+    this.$("ttsText").addEventListener("input", (event) => {
+      this._ttsText = event.target.value;
+      this._refreshControls();
+    });
+    this.$("ttsLanguage").addEventListener("input", (event) => { this._ttsLanguage = event.target.value; });
+    this.$("ttsVoice").addEventListener("input", (event) => { this._ttsVoice = event.target.value; });
+    this.$("ttsSend").addEventListener("click", () => this._sendTts());
     this.$("refresh")?.addEventListener("click", () => this._loadSpeakers());
     this.$("micCopy").addEventListener("click", async () => {
       try {
@@ -958,7 +1027,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
       }
     });
     this.$("speaker").addEventListener("click", (event) => {
-      if ((this._recording || this._sending) && event.target.closest("summary")) event.preventDefault();
+      if ((this._recording || this._sending || this._ttsSending) && event.target.closest("summary")) event.preventDefault();
     });
     this.$("selectAll").addEventListener("click", () => {
       this._setSelectedSpeakers(this._configuredSpeakers.filter((s) => this._speakerAvailable(s)).map((s) => s.entity_id));
@@ -1024,6 +1093,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
     this._stopTracks();
     // Detaching a card must never leave it permanently stuck in a recording state.
     this._sending = false;
+    this._ttsSending = false;
   }
 
   _status(message, type = "", note = null) {
@@ -1071,10 +1141,15 @@ class P2TalkGoogleCastCard extends HTMLElement {
   _refreshControls() {
     if (!this.$) return;
     const selected = this._selectedSpeakers().length > 0;
-    this.$("mic").disabled = !this._secureMicrophoneOrigin() || this._recording || this._sending || !selected;
+    this.$("mic").disabled = !this._secureMicrophoneOrigin() || this._recording || this._sending || this._ttsSending || !selected;
     // Keep the pressed button operable for pointerup during recording.
     if (this._recording && this._secureMicrophoneOrigin()) this.$("mic").disabled = false;
-    const locked = this._recording || this._sending;
+    const locked = this._recording || this._sending || this._ttsSending;
+    this.$("ttsSend").disabled = locked || !selected || !this._hass || !this.$("ttsText").value.trim();
+    this.$("ttsText").disabled = this._ttsSending;
+    this.$("ttsLanguage").disabled = this._ttsSending;
+    this.$("ttsVoice").disabled = this._ttsSending;
+    this.$("ttsSendLabel").textContent = this._ttsSending ? "Đang gửi TTS..." : "Gửi TTS đến loa";
     if (locked) this.$("speaker").open = false;
     this.$("speakerSummary").setAttribute("aria-disabled", String(locked));
     for (const control of this.$("speakerOptions").querySelectorAll("input")) {
@@ -1083,7 +1158,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
     }
     this.$("selectAll").disabled = locked;
     this.$("selectNone").disabled = locked;
-    if (this.$("stop")) this.$("stop").disabled = this._stopPending || this._sending || this._recording || !selected;
+    if (this.$("stop")) this.$("stop").disabled = this._stopPending || this._sending || this._recording || this._ttsSending || !selected;
     if (this.$("cancel")) this.$("cancel").disabled = !this._recording;
     if (this.$("refresh")) this.$("refresh").disabled = locked;
     if (this.$("configure")) this.$("configure").style.pointerEvents = locked ? "none" : "";
@@ -1104,10 +1179,10 @@ class P2TalkGoogleCastCard extends HTMLElement {
       this._configuredSpeakers = speakers;
       this._applyConfiguredSpeakers();
       this._speakerStateSignature = this._speakerSignature();
-      if (!this._recording && !this._sending) {
+      if (!this._recording && !this._sending && !this._ttsSending) {
         const available = speakers.some((s) => s.is_available);
         if (insecure) {
-          this._status("Nút micro đã tắt vì Home Assistant đang dùng HTTP.", "error",
+          this._status("Micro tắt vì HTTP, nhưng có thể nhập văn bản và gửi TTS.", "error",
             "Mở dashboard bằng HTTPS hợp lệ để ghi âm; P2Talk không tự chuyển địa chỉ.");
         } else this._status(available && this._selectedSpeakers().length
           ? "Sẵn sàng. Nhấn giữ micro để nói."
@@ -1159,7 +1234,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
   }
 
   _setSelectedSpeakers(ids) {
-    if (this._recording || this._sending) return;
+    if (this._recording || this._sending || this._ttsSending) return;
     const allowed = new Set(this._configuredSpeakers.filter((s) => this._speakerAvailable(s)).map((s) => s.entity_id));
     const valid = [...new Set(ids.filter((id) => allowed.has(id)))];
     this._selectedSpeakerIds = new Set(valid.slice(0, MAX_TARGET_SPEAKERS));
@@ -1242,7 +1317,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
   }
 
   async _startRecording() {
-    if (this._recording || this._sending || !this._selectedSpeakers().length || this._pressed) return;
+    if (this._recording || this._sending || this._ttsSending || !this._selectedSpeakers().length || this._pressed) return;
     // Microphone permission is granted only to the current secure document;
     // The current page must already be HTTPS; P2Talk never navigates away.
     if (!this._secureMicrophoneOrigin()) {
@@ -1393,6 +1468,50 @@ class P2TalkGoogleCastCard extends HTMLElement {
     }
   }
 
+  async _sendTts() {
+    if (this._ttsSending || this._recording || this._sending || !this._hass) return;
+    const message = this.$("ttsText").value.trim();
+    const speakers = this._selectedSpeakers().map((speaker) => speaker.entity_id);
+    if (!message) { this._status("Hãy nhập nội dung cần đọc TTS.", "error"); return; }
+    if (!speakers.length) { this._status("Hãy chọn ít nhất một loa để phát TTS.", "error"); return; }
+    const ttsEntity = typeof this._config.tts_entity === "string" && this._config.tts_entity.trim()
+      ? this._config.tts_entity.trim() : DEFAULT_TTS_ENTITY;
+    if (!/^tts\.[a-z0-9_]+$/.test(ttsEntity)) {
+      this._status("Entity TTS không hợp lệ. Kiểm tra cấu hình thẻ (tts_entity).", "error");
+      return;
+    }
+    const language = this.$("ttsLanguage").value.trim();
+    const voice = this.$("ttsVoice").value.trim();
+    // When left blank, language/options must be ABSENT so the TTS provider
+    // selects its own language and default voice.
+    const payload = { cache:false, message };
+    if (language) payload.language = language;
+    if (voice) payload.options = { voice };
+    this._ttsSending = true;
+    this._refreshControls();
+    this._status(`Đang gửi TTS đến ${speakers.length} loa...`, "loading");
+    try {
+      const results = await Promise.allSettled(speakers.map((speaker) =>
+        this._hass.callService("tts", "speak", {
+          ...payload, media_player_entity_id:speaker,
+        }, { entity_id:ttsEntity })
+      ));
+      const errors = results.filter((result) => result.status === "rejected");
+      const succeeded = results.length - errors.length;
+      if (errors.length) {
+        const reason = errors[0].reason?.message || String(errors[0].reason);
+        this._status(`Đã gửi TTS đến ${succeeded}/${speakers.length} loa. ${errors.length} loa lỗi: ${reason}`, "error");
+      } else {
+        this._status(`Đã gửi TTS đến ${succeeded} loa.`, "success");
+      }
+    } catch (error) {
+      this._status(`Không gửi được TTS: ${error.message || error}`, "error");
+    } finally {
+      this._ttsSending = false;
+      if (this.isConnected) this._refreshControls();
+    }
+  }
+
   async _stopSpeaker() {
     const speakers = this._selectedSpeakers().map((s) => s.entity_id);
     if (!speakers.length || !this._hass || this._stopPending) return;
@@ -1455,6 +1574,8 @@ class P2TalkGoogleCastEditor extends HTMLElement {
       .choices{max-height:220px;overflow:auto}.choices label{display:flex;gap:8px;align-items:center}
       p{font-size:12px;color:var(--secondary-text-color)}
     </style><label>Tên thẻ <input id="name" type="text" placeholder="P2Talk Google Cast" /></label>
+    <label>Bộ TTS (entity_id) <input id="ttsEntity" type="text" placeholder="tts.wyoming_vietnamese" /></label>
+    <p>Nếu để trống, dùng tts.wyoming_vietnamese. Language và Voice có thể nhập trực tiếp trên thẻ khi cần phát.</p>
     <p>Chọn loa mặc định (để trống sẽ tự chọn loa đang khả dụng hoặc dùng lựa chọn đã lưu).</p>
     <div id="choices" class="choices"></div>`;
     this.shadowRoot.getElementById("name").value = this._config.name || "";
@@ -1462,6 +1583,13 @@ class P2TalkGoogleCastEditor extends HTMLElement {
       const next = {...this._config};
       if (event.target.value.trim()) next.name = event.target.value.trim();
       else delete next.name;
+      this._emit(next);
+    });
+    this.shadowRoot.getElementById("ttsEntity").value = this._config.tts_entity || "";
+    this.shadowRoot.getElementById("ttsEntity").addEventListener("change", (event) => {
+      const next = {...this._config};
+      if (event.target.value.trim()) next.tts_entity = event.target.value.trim();
+      else delete next.tts_entity;
       this._emit(next);
     });
     const choices = this.shadowRoot.getElementById("choices");
@@ -1493,8 +1621,8 @@ if (!customElements.get("p2talk-google-cast-editor"))
 
 window.customCards = window.customCards || [];
 for (const definition of [
-  {type:"p2talk-google-cast-card",name:"P2Talk Google Cast — Full",description:"Ghi âm, phát và dừng Google Cast; toàn bộ giao diện P2Talk.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
-  {type:"p2talk-google-cast-compact-card",name:"P2Talk Google Cast — Compact",description:"Chọn loa, âm lượng và nhấn giữ để nói.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
+  {type:"p2talk-google-cast-card",name:"P2Talk Google Cast — Full",description:"Ghi âm, TTS từ văn bản, phát và dừng Google Cast; toàn bộ giao diện P2Talk.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
+  {type:"p2talk-google-cast-compact-card",name:"P2Talk Google Cast — Compact",description:"Chọn loa, âm lượng, nhấn giữ để nói hoặc nhập văn bản TTS.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
 ]) {
   if (!window.customCards.some((card) => card.type === definition.type))
     window.customCards.push(definition);
