@@ -10,6 +10,7 @@ const CHUNK_BYTES = 48 * 1024;
 const UPLOAD_WINDOW = 6; // amortize Wi-Fi/WebSocket RTT while keeping ordering
 const MAX_TARGET_SPEAKERS = 32;
 const STORAGE_PREFIX = "p2talk_google_cast_";
+const COLOR_THEMES = ["ha", "aurora", "ocean", "sunset", "emerald", "graphite"];
 function readSpeakerPreferences(key) {
   try {
     const value = localStorage.getItem(key);
@@ -132,648 +133,256 @@ function microphoneAdvice(error, environment = microphoneEnvironment()) {
 
 
 const styles = `
-/* Real Lovelace cards use ha-card and inherit HA theme variables. */
-:host { display:block; min-height:0; color:var(--primary-text-color,#17243a); font-family:var(--paper-font-body1_-_font-family,system-ui,-apple-system,'Segoe UI',sans-serif); --pt-primary:var(--primary-color,#2782ee); --pt-accent:var(--accent-color,#7965e9); --pt-ink:var(--primary-text-color,#17243a); --pt-muted:var(--secondary-text-color,#63738a); --pt-card:var(--card-background-color,#fff); --pt-border:var(--divider-color,#d7e0ed); --pt-tint:color-mix(in srgb,var(--pt-card) 93%,var(--pt-primary) 7%); }
-* { box-sizing:border-box; }
-button,select,input { font:inherit; }
-button:focus-visible,select:focus-visible,a:focus-visible,input:focus-visible { outline:3px solid var(--pt-primary); outline-offset:3px; }
-.svg-icon { width:20px; height:20px; flex:none; }
-.wrap { min-height:100%; display:flex; justify-content:center; align-items:flex-start; padding:clamp(16px,3.3vw,34px) 14px max(28px,env(safe-area-inset-bottom)); /* HA 2026.11 paints the panel background; do not cover it */ background:transparent; }
-.surface { position:relative; isolation:isolate; width:min(100%,640px); border:1px solid var(--pt-border); border-radius:30px; padding:clamp(19px,4vw,32px); background:var(--pt-card); box-shadow:0 18px 55px color-mix(in srgb,var(--pt-ink) 12%,transparent),0 2px 8px color-mix(in srgb,var(--pt-ink) 5%,transparent); overflow:hidden; }
-.surface::before { content:""; position:absolute; inset:0 0 auto; height:230px; z-index:-1; pointer-events:none; background:radial-gradient(ellipse at 80% 0%,color-mix(in srgb,var(--pt-primary) 16%,transparent),transparent 66%),radial-gradient(ellipse at 10% 0%,color-mix(in srgb,var(--pt-accent) 10%,transparent),transparent 55%); }
-.head { display:flex; align-items:center; gap:14px; padding-bottom:22px; margin-bottom:23px; border-bottom:1px solid var(--pt-border); }
-.symbol { width:60px; height:60px; flex:none; border-radius:19px; background:linear-gradient(138deg,#1269e8 0%,#0bbce8 55%,#8456ec 100%); display:grid; place-items:center; box-shadow:0 9px 22px rgba(24,119,240,.22),inset 0 1px 1px rgba(255,255,255,.4); }
-.mark-icon { width:43px; height:43px; }
-.heading { min-width:0; flex:1; }
-.heading .eyebrow { margin:0 0 4px; color:var(--pt-primary); letter-spacing:.13em; font-size:10px; font-weight:800; text-transform:uppercase; }
-h1 { font-size:clamp(18px,3vw,23px); letter-spacing:-.75px; line-height:1.2; margin:0; font-weight:790; }
-.subtitle { margin:5px 0 0; font-size:12px; line-height:1.5; color:var(--pt-muted); }
-.lan-pill { flex:none; display:inline-flex; align-items:center; gap:6px; padding:7px 9px; border-radius:100px; border:1px solid color-mix(in srgb,#16a56b 24%,var(--pt-border)); color:var(--success-color,#118759); background:color-mix(in srgb,var(--pt-card) 88%,#38d39e 12%); font-size:11px; font-weight:750; }
-.lan-pill .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
-.section { margin-bottom:22px; }
-.section-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:11px; }
-.section-title { display:inline-flex; align-items:center; gap:9px; color:var(--pt-ink); font-size:14px; font-weight:750; }
-.section-title .svg-icon { color:var(--pt-primary); }
-.small-link { display:inline-flex; align-items:center; gap:6px; border:0; padding:7px 5px; border-radius:8px; background:transparent; color:var(--pt-primary); cursor:pointer; font-size:12px; font-weight:730; text-decoration:none; white-space:nowrap; }
-.small-link:hover { background:var(--pt-tint); }
-.small-link .svg-icon { width:15px; height:15px; }
-.small-link:disabled { opacity:.5; cursor:default; }
-.select-wrap { position:relative; display:flex; align-items:center; border:1px solid var(--pt-border); border-radius:16px; background:var(--pt-tint); transition:border-color .2s,box-shadow .2s; }
-.select-wrap:focus-within { border-color:var(--pt-primary); box-shadow:0 0 0 3px color-mix(in srgb,var(--pt-primary) 14%,transparent); }
-.select-wrap .device-icon { width:44px; height:44px; margin-inline-start:10px; display:grid; flex:none; place-items:center; border-radius:13px; background:linear-gradient(145deg,color-mix(in srgb,var(--pt-primary) 12%,var(--pt-card)),color-mix(in srgb,var(--pt-accent) 12%,var(--pt-card))); color:var(--pt-primary); }
-.select-wrap select { position:relative; z-index:1; appearance:none; background:transparent; color:var(--pt-ink); width:100%; border:0; outline:0; min-width:0; padding:16px 36px 16px 12px; cursor:pointer; font-size:14px; font-weight:720; }
-.select-wrap select:disabled { cursor:default; opacity:.55; }
-.select-wrap select option { background:var(--pt-card); color:var(--pt-ink); }
-.select-chevron { position:absolute; pointer-events:none; right:15px; width:18px; height:18px; color:var(--pt-muted); }
-.speaker-meta { padding:9px 2px 0; display:flex; align-items:center; gap:7px; font-size:11px; color:var(--pt-muted); }
-.speaker-meta .state-dot { width:7px; height:7px; border-radius:100%; background:var(--pt-muted); }
-.speaker-meta.online .state-dot { background:var(--success-color,#16a66b); box-shadow:0 0 0 3px color-mix(in srgb,var(--success-color,#16a66b) 14%,transparent); }
-.speaker-meta.offline .state-dot { background:var(--error-color,#ee5665); }
-.volume-box { border:1px solid var(--pt-border); padding:11px 14px; border-radius:16px; background:var(--pt-tint); display:flex; align-items:center; gap:13px; }
-.volume-box .svg-icon { color:var(--pt-primary); width:21px; height:21px; }
-.volume-box input { width:100%; min-width:0; appearance:none; height:7px; border-radius:10px; cursor:pointer; background:linear-gradient(90deg,var(--pt-primary) 0,var(--pt-primary) var(--progress,65%),color-mix(in srgb,var(--pt-border) 80%,transparent) var(--progress,65%),color-mix(in srgb,var(--pt-border) 80%,transparent) 100%); }
-.volume-box input::-webkit-slider-thumb { appearance:none; width:18px; height:18px; border-radius:50%; border:3px solid var(--pt-card); background:var(--pt-primary); box-shadow:0 1px 5px rgba(0,0,0,.2); }
-.volume-box input::-moz-range-thumb { width:13px; height:13px; border-radius:50%; border:3px solid var(--pt-card); background:var(--pt-primary); box-shadow:0 1px 5px rgba(0,0,0,.2); }
-.volume-box output { padding:5px 8px; min-width:48px; border-radius:9px; font-weight:800; font-size:13px; text-align:center; font-variant-numeric:tabular-nums; color:var(--pt-primary); background:color-mix(in srgb,var(--pt-primary) 10%,var(--pt-card)); }
-.stage { position:relative; padding:8px 0 14px; margin:0 0 8px; text-align:center; overflow:hidden; }
-.stage::before { content:""; position:absolute; top:43px; left:50%; width:410px; height:270px; transform:translateX(-50%); z-index:-1; pointer-events:none; background:radial-gradient(ellipse,color-mix(in srgb,var(--pt-primary) 11%,transparent) 0,transparent 66%); }
-.stage-kicker { display:flex; justify-content:center; gap:7px; align-items:center; font-size:11px; font-weight:750; letter-spacing:.07em; color:var(--pt-muted); text-transform:uppercase; }
-.stage-kicker .svg-icon { width:14px; height:14px; color:var(--pt-primary); }
-.mic-layout { display:flex; align-items:center; justify-content:center; gap:13px; padding:15px 0 1px; }
-.wave { display:flex; align-items:center; justify-content:center; gap:5px; width:92px; height:96px; opacity:.56; pointer-events:none; }
-.wave span { display:block; flex:none; width:4px; height:var(--h); border-radius:10px; background:linear-gradient(180deg,#12bff0,var(--pt-primary),var(--pt-accent)); transform:scaleY(.7); transition:transform .3s; }
-.mic-orbit { display:grid; place-items:center; position:relative; width:202px; height:202px; flex:none; }
-.mic-orbit::before,.mic-orbit::after { content:""; pointer-events:none; position:absolute; inset:7px; border:1px solid color-mix(in srgb,var(--pt-primary) 30%,transparent); border-radius:50%; transition:border-color .2s; }
-.mic-orbit::after { inset:0; border-color:color-mix(in srgb,var(--pt-accent) 20%,transparent); }
-.mic { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:164px; height:164px; border:1px solid rgba(255,255,255,.28); border-radius:50%; cursor:pointer; color:white; background:linear-gradient(145deg,#1458d9,#169def 53%,#7d5be8); box-shadow:0 18px 38px rgba(30,110,236,.26),inset 0 3px 5px rgba(255,255,255,.2),inset 0 -8px 18px rgba(32,31,141,.2); touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; transition:transform .18s,box-shadow .18s,filter .2s; }
-.mic .svg-icon { width:55px; height:55px; stroke-width:1.4; filter:drop-shadow(0 3px 8px rgba(0,0,0,.12)); }
-.mic span { font-size:11px; letter-spacing:.08em; font-weight:830; }
-.mic-orbit:hover::after { animation:slow-orbit 4s ease-in-out infinite; }
-.mic:hover:not(:disabled) { transform:scale(1.035); box-shadow:0 21px 44px rgba(30,110,236,.34); }
-.mic:active:not(:disabled) { transform:scale(.97); }
-.mic:disabled { cursor:not-allowed; opacity:.46; filter:grayscale(.28); box-shadow:none; }
-.stage.recording .mic { background:linear-gradient(145deg,#f43f5e,#ef4444 45%,#fb923c); box-shadow:0 18px 40px rgba(239,68,68,.27); transform:scale(1.03); }
-.stage.recording .mic-orbit::before { border-color:rgba(248,113,113,.7); }
-.stage.recording .mic-orbit::after { border-color:rgba(248,113,113,.4); animation:record-pulse 1.3s ease-out infinite; }
-.stage.recording .wave span { animation:equalize .7s ease-in-out infinite alternate; animation-delay:var(--delay); }
-.stage.sending .mic-orbit::after { border-width:3px; border-top-color:var(--pt-primary); border-right-color:transparent; animation:spin 1s linear infinite; }
-.stage.sending .mic { filter:saturate(.6); }
-.stage.sending .wave span { animation:equalize 1.3s ease-in-out infinite alternate; animation-delay:var(--delay); opacity:.55; }
-.hint { font-size:17px; font-weight:800; letter-spacing:-.2px; margin:7px 0 4px; }
-.counter { font-size:12px; min-height:20px; font-variant-numeric:tabular-nums; color:var(--pt-muted); }
-.actions { display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:4px; }
-.action { display:flex; justify-content:center; align-items:center; gap:9px; padding:13px 12px; border:1px solid var(--pt-border); border-radius:13px; background:var(--pt-tint); color:var(--pt-ink); font-size:13px; font-weight:730; cursor:pointer; transition:transform .15s,background .15s; }
-.action:hover:not(:disabled) { transform:translateY(-1px); background:color-mix(in srgb,var(--pt-primary) 9%,var(--pt-card)); }
-.action .svg-icon { width:17px; height:17px; }
-.action.stop-action { border-color:color-mix(in srgb,var(--pt-primary) 35%,var(--pt-border)); color:var(--pt-primary); background:color-mix(in srgb,var(--pt-primary) 8%,var(--pt-card)); }
-.action:disabled { cursor:not-allowed; opacity:.45; }
-.status { display:flex; text-align:start; align-items:flex-start; gap:11px; min-height:62px; margin-top:18px; padding:14px 15px; border-radius:15px; background:var(--pt-tint); border:1px solid var(--pt-border); color:var(--pt-muted); font-size:12px; line-height:1.55; overflow-wrap:anywhere; }
-.status .status-symbol { display:grid; place-items:center; width:30px; height:30px; flex:none; border-radius:10px; color:var(--pt-primary); background:color-mix(in srgb,var(--pt-primary) 12%,var(--pt-card)); }
-.status .status-symbol .svg-icon { width:17px; height:17px; }
-.status .status-content { align-self:center; }
-.status.success { border-color:color-mix(in srgb,var(--success-color,#10a678) 35%,var(--pt-border)); background:color-mix(in srgb,var(--success-color,#10a678) 7%,var(--pt-card)); color:var(--primary-text-color,#1b2c3c); }
-.status.success .status-symbol { color:var(--success-color,#0c9963); background:color-mix(in srgb,var(--success-color,#10a678) 12%,var(--pt-card)); }
-.status.error { border-color:color-mix(in srgb,var(--error-color,#eb4354) 45%,var(--pt-border)); background:color-mix(in srgb,var(--error-color,#eb4354) 8%,var(--pt-card)); color:var(--error-color,#dc3447); }
-.status.error .status-symbol { color:var(--error-color,#dc3447); background:color-mix(in srgb,var(--error-color,#eb4354) 12%,var(--pt-card)); }
-.status.loading .status-symbol .svg-icon { animation:spin 1.3s linear infinite; }
-.metrics { display:none; margin-top:10px; padding:11px 13px; border-radius:12px; background:var(--pt-tint); color:var(--pt-muted); font-size:11px; line-height:1.5; }
-.metrics:not(:empty) { display:block; }
-.foot { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-top:19px; padding-top:16px; border-top:1px solid var(--pt-border); color:var(--pt-muted); font-size:11px; }
-.foot .privacy { display:flex; align-items:center; gap:8px; }
-.foot .svg-icon { width:15px; height:15px; color:var(--success-color,#10a678); }
-.foot .foot-brand { font-weight:730; color:var(--pt-primary); }
-@keyframes record-pulse { 0% { transform:scale(.92); opacity:.95; } 100% { transform:scale(1.22); opacity:0; } }
-@keyframes slow-orbit { 50% { transform:scale(1.035); opacity:.55; } }
-@keyframes equalize { from { transform:scaleY(.4); } to { transform:scaleY(1.15); } }
-@keyframes spin { to { transform:rotate(360deg); } }
-@media (max-width:520px) { .surface { border-radius:23px; padding:19px 16px; } .symbol { width:52px; height:52px; border-radius:16px; } .mark-icon { width:38px; height:38px; } .lan-pill { padding:6px 8px; font-size:10px; } .wave { width:42px; gap:3px; } .wave span { width:3px; } .wave span:nth-child(n+6) { display:none; } .mic-orbit { width:187px; height:187px; } .mic { width:156px; height:156px; } .mic-layout { gap:0; } }
-@media (max-width:350px) { .lan-pill { display:none; } .wave { display:none; } .mic-layout { margin-inline:auto; } .head { gap:9px; } }
-@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
-/* P2Talk Studio UI: functional recreation of the approved visual design.
-   No runtime image/CDN/font requests; decorative media comes from local HA assets. */
+/* P2Talk: compact, theme-aware Lovelace card. Scoped to the shadow root. */
 :host {
-  --pt-brand:#1275f7; --pt-cyan:#00c5f9; --pt-violet:#8c6aff;
-  --pt-primary:var(--primary-color,#167dfa);
-  --pt-border:color-mix(in srgb,var(--divider-color,#d6e0ef) 74%,#b1c5e7 26%);
-  --pt-hero-ink:#123363;
+  display:block; min-width:0; color:var(--primary-text-color,#e7edf8);
+  font-family:var(--ha-font-family-body,var(--paper-font-body1_-_font-family,system-ui,-apple-system,"Segoe UI",sans-serif));
+  --pt-bg:var(--ha-card-background,var(--card-background-color,#1b2940));
+  --pt-ink:var(--primary-text-color,#e7edf8);
+  --pt-muted:var(--secondary-text-color,#9caec4);
+  --pt-border:var(--divider-color,rgba(152,183,216,.2));
+  --pt-primary:var(--primary-color,#56a8fc);
+  --pt-accent:var(--accent-color,#7398ff);
+  --pt-on-primary:var(--text-primary-color,#fff);
+  --pt-head-from:color-mix(in srgb,var(--pt-bg) 81%,var(--pt-primary) 19%);
+  --pt-head-to:var(--pt-bg);
+  --pt-mic-from:#1665bb; --pt-mic-to:#174580; --pt-mic-text:#fff;
+  --pt-glow:var(--pt-primary);
+  --pt-soft:color-mix(in srgb,var(--pt-bg) 92%,var(--pt-primary) 8%);
+  --pt-soft-2:color-mix(in srgb,var(--pt-bg) 83%,var(--pt-primary) 17%);
 }
-.wrap { padding:clamp(12px,2.8vw,28px) 12px max(22px,env(safe-area-inset-bottom)); }
-.surface { width:min(100%,620px); padding:0; border-radius:28px;
-  background:linear-gradient(162deg,color-mix(in srgb,var(--pt-card) 91%,#c7d9ff 9%),var(--pt-card) 72%);
-  border:1px solid color-mix(in srgb,var(--pt-border) 75%,#91c3fd 25%);
-  box-shadow:0 22px 56px rgba(38,69,124,.18),0 5px 13px rgba(29,80,136,.10);
+
+/* Five integrated multimedia presets. All colors scoped to the P2Talk card only.
+   Each preset follows Home Assistant darkMode but does not recolor other cards. */
+:host([data-color-theme="aurora"][data-dark="true"]) { --pt-bg:#11182b; --pt-ink:#f5f6ff; --pt-muted:#c0c9e1; --pt-border:#49547c; --pt-primary:#c0b2ff; --pt-accent:#71d7f0; --pt-on-primary:#191433; --pt-head-from:#22244e; --pt-head-to:#192f4b; --pt-mic-from:#6445a8; --pt-mic-to:#43337a; --pt-glow:#7175e8; }
+:host([data-color-theme="aurora"][data-dark="false"]) { --pt-bg:#f7f5ff; --pt-ink:#201c3a; --pt-muted:#524b75; --pt-border:#cfc9e3; --pt-primary:#5540ae; --pt-accent:#156e86; --pt-on-primary:#ffffff; --pt-head-from:#e5dcff; --pt-head-to:#e9f5ff; --pt-mic-from:#6044a5; --pt-mic-to:#3c2d77; --pt-glow:#9c83ee; }
+:host([data-color-theme="ocean"][data-dark="true"]) { --pt-bg:#091c30; --pt-ink:#effaff; --pt-muted:#b6d5e5; --pt-border:#335673; --pt-primary:#6adbf4; --pt-accent:#81baff; --pt-on-primary:#052739; --pt-head-from:#113b67; --pt-head-to:#09304c; --pt-mic-from:#096aa8; --pt-mic-to:#0a396b; --pt-glow:#16b9ea; }
+:host([data-color-theme="ocean"][data-dark="false"]) { --pt-bg:#f0faff; --pt-ink:#0c2c47; --pt-muted:#315a74; --pt-border:#bdd6e5; --pt-primary:#00659d; --pt-accent:#007c84; --pt-on-primary:#ffffff; --pt-head-from:#d7efff; --pt-head-to:#dbfbfa; --pt-mic-from:#086ca5; --pt-mic-to:#0b3e70; --pt-glow:#34acd9; }
+:host([data-color-theme="sunset"][data-dark="true"]) { --pt-bg:#281821; --pt-ink:#fff4f0; --pt-muted:#e7c5cc; --pt-border:#744551; --pt-primary:#ffc199; --pt-accent:#ff9cb7; --pt-on-primary:#3c1b1e; --pt-head-from:#673047; --pt-head-to:#482938; --pt-mic-from:#ad3556; --pt-mic-to:#682950; --pt-glow:#f56b85; }
+:host([data-color-theme="sunset"][data-dark="false"]) { --pt-bg:#fff6f1; --pt-ink:#43241e; --pt-muted:#785149; --pt-border:#e9c7bc; --pt-primary:#a7343f; --pt-accent:#8e466b; --pt-on-primary:#ffffff; --pt-head-from:#ffe2d6; --pt-head-to:#fce6ed; --pt-mic-from:#b03552; --pt-mic-to:#722b52; --pt-glow:#f39b83; }
+:host([data-color-theme="emerald"][data-dark="true"]) { --pt-bg:#0b211e; --pt-ink:#effdf5; --pt-muted:#b7dccf; --pt-border:#386357; --pt-primary:#72eabe; --pt-accent:#76dce1; --pt-on-primary:#093d30; --pt-head-from:#164a41; --pt-head-to:#143333; --pt-mic-from:#0a7965; --pt-mic-to:#095347; --pt-glow:#51cfa5; }
+:host([data-color-theme="emerald"][data-dark="false"]) { --pt-bg:#f0fcf5; --pt-ink:#143b2f; --pt-muted:#456b59; --pt-border:#c0ddcc; --pt-primary:#006b52; --pt-accent:#267b72; --pt-on-primary:#ffffff; --pt-head-from:#d5f4df; --pt-head-to:#daf3f2; --pt-mic-from:#13735a; --pt-mic-to:#0b4f43; --pt-glow:#7bd6a4; }
+:host([data-color-theme="graphite"][data-dark="true"]) { --pt-bg:#181c25; --pt-ink:#f6f7f9; --pt-muted:#c7ccd6; --pt-border:#48505d; --pt-primary:#ffdc82; --pt-accent:#9ba8c9; --pt-on-primary:#342808; --pt-head-from:#383746; --pt-head-to:#2d3443; --pt-mic-from:#536279; --pt-mic-to:#2b394d; --pt-glow:#edc56b; }
+:host([data-color-theme="graphite"][data-dark="false"]) { --pt-bg:#f6f7f9; --pt-ink:#27303b; --pt-muted:#596472; --pt-border:#cbd2db; --pt-primary:#48576b; --pt-accent:#465a83; --pt-on-primary:#ffffff; --pt-head-from:#dfe5ef; --pt-head-to:#e5e8e9; --pt-mic-from:#505f76; --pt-mic-to:#2b384a; --pt-glow:#9eaec5; }
+*,*::before,*::after { box-sizing:border-box; }
+[hidden] { display:none!important; }
+button,input,textarea { font:inherit; }
+button { cursor:pointer; }
+button:disabled { cursor:not-allowed; opacity:.5; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible { outline:2px solid var(--pt-primary); outline-offset:2px; }
+.svg-icon { width:18px; height:18px; flex:none; }
+.wrap { padding:0; margin:0; background:transparent; }
+.surface {
+  display:block; position:relative; isolation:isolate; width:100%; max-width:none;
+  margin:0; overflow:hidden; border-radius:var(--ha-card-border-radius,16px);
+  color:var(--pt-ink); background:var(--pt-bg);
+  border:1px solid var(--ha-card-border-color,var(--pt-border));
+  box-shadow:var(--ha-card-box-shadow,0 2px 5px rgba(0,0,0,.08));
 }
-.surface::before { display:none; }
-.head { position:relative; display:flex; align-items:center; gap:14px; height:174px; padding:22px 23px 31px; margin:0; overflow:hidden;
-  border:0; color:var(--pt-hero-ink);
-  background:linear-gradient(115deg,#a9d9ff 0%,#d4e9ff 42%,#7ebdfd 78%,#247ad8 100%);
+.head { display:flex; align-items:center; gap:10px; padding:13px 15px 11px; min-height:67px;
+  background:linear-gradient(115deg,var(--pt-head-from),var(--pt-head-to));
+  border-bottom:1px solid var(--pt-border); }
+.head::after { content:""; position:absolute; inset:auto 0 0; height:2px;
+  background:linear-gradient(90deg,var(--pt-primary),var(--pt-accent),transparent); opacity:.85; }
+.head { position:relative; }
+.symbol { display:grid; place-items:center; flex:none; width:36px; height:36px; border-radius:12px;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--pt-primary) 22%,var(--pt-bg)),color-mix(in srgb,var(--pt-accent) 11%,var(--pt-bg))); color:var(--pt-primary);
+  box-shadow:inset 0 1px 0 color-mix(in srgb,var(--pt-primary) 22%,transparent); }
+.symbol .svg-icon { width:21px; height:21px; }
+.heading { flex:1; min-width:0; }
+.heading h1 { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  color:var(--pt-ink); font-size:15px; font-weight:740; letter-spacing:-.25px; line-height:1.3; }
+.subtitle { margin:2px 0 0; font-size:10px; line-height:1.35; color:var(--pt-muted); }
+.lan-pill { display:inline-flex; align-items:center; flex:none; gap:5px; max-width:88px; min-height:25px;
+  padding:5px 7px; border:1px solid var(--pt-border); border-radius:20px; font-size:10px;
+  color:var(--pt-muted); background:var(--pt-soft); white-space:nowrap; }
+.lan-pill .dot { width:6px; height:6px; border-radius:50%; background:var(--success-color,#25b781); }
+.lan-pill.unavailable .dot { background:var(--error-color,#e85b66); }
+.lan-pill.busy .dot { background:var(--pt-primary); }
+ .panel-body { min-width:0; padding:12px 14px 13px;
+  background:radial-gradient(ellipse at 84% -25%,color-mix(in srgb,var(--pt-glow) 8%,transparent),transparent 72%); }
+.section { margin:0 0 12px; }
+.section-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 6px; }
+.section-title { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--pt-ink); }
+.section-title .svg-icon { width:15px; height:15px; color:var(--pt-primary); }
+.section-tools { display:flex; align-items:center; gap:3px; }
+.refresh-icon,.small-link { display:inline-flex; align-items:center; justify-content:center; gap:5px;
+  color:var(--pt-primary); background:transparent; text-decoration:none; border:0; border-radius:9px;
+  padding:5px 6px; font-size:11px; font-weight:650; }
+.refresh-icon:hover,.small-link:hover { background:var(--pt-soft); }
+.refresh-icon .svg-icon,.small-link .svg-icon { width:14px; height:14px; }
+.select-wrap { background:var(--pt-soft); border:1px solid var(--pt-border); border-radius:11px; }
+.speaker-picker > summary { list-style:none; display:flex; align-items:center; gap:8px; cursor:pointer;
+  min-height:44px; padding:5px 10px; }
+.speaker-picker > summary::-webkit-details-marker { display:none; }
+.speaker-picker > summary[aria-disabled="true"] { opacity:.65; cursor:default; }
+.device-icon { display:grid; place-items:center; flex:none; color:var(--pt-primary); }
+.device-icon .svg-icon { width:19px; height:19px; }
+.speaker-summary-text { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  color:var(--pt-ink); font-weight:680; font-size:12px; }
+.speaker-availability { flex:none; display:flex; align-items:center; gap:5px;
+  font-size:10px; color:var(--pt-muted); white-space:nowrap; }
+.speaker-availability .state-dot { display:block; width:6px; height:6px; border-radius:50%; background:var(--pt-muted); }
+.speaker-availability.online .state-dot { background:var(--success-color,#2bc48b); }
+.select-chevron { width:15px; height:15px; flex:none; color:var(--pt-muted); transition:transform .15s; }
+.speaker-picker[open] .select-chevron { transform:rotate(180deg); }
+.speaker-picker-body { padding:8px; border-top:1px solid var(--pt-border); }
+.speaker-picker-tools { display:flex; gap:5px; margin-bottom:7px; }
+.speaker-picker-tools button { background:var(--pt-soft); color:var(--pt-ink); padding:6px 7px;
+  font-size:11px; border:1px solid var(--pt-border); border-radius:8px; }
+.speaker-picker-tools button:last-child { margin-left:auto; color:var(--pt-primary); }
+.speaker-options { display:grid; gap:4px; max-height:230px; overflow:auto; }
+.speaker-option { display:flex; gap:8px; align-items:center; padding:8px; min-height:38px;
+  border:1px solid transparent; border-radius:8px; background:var(--pt-soft); cursor:pointer; }
+.speaker-option:has(input:checked) { border-color:color-mix(in srgb,var(--pt-primary) 44%,var(--pt-border)); }
+.speaker-option:has(input:disabled) { opacity:.55; cursor:default; }
+.speaker-option input { width:16px; height:16px; margin:0; accent-color:var(--pt-primary); }
+.speaker-option-name { flex:1; min-width:0; font-size:12px; overflow-wrap:anywhere; }
+.speaker-option small { font-size:10px; color:var(--pt-muted); text-align:right; }
+.speaker-picker-empty { color:var(--pt-muted); font-size:12px; margin:8px 0; }
+.speaker-meta { display:none; }
+ .volume-section { margin-bottom:13px; }
+.volume-row { display:flex; align-items:stretch; gap:9px; min-width:0; }
+.volume-row .volume-box { flex:1 1 0; min-width:0; }
+.volume-box { display:flex; align-items:center; gap:10px; min-height:40px; padding:6px 10px;
+  border:1px solid var(--pt-border); border-radius:11px; background:var(--pt-soft); }
+.volume-box .svg-icon { width:16px; height:16px; color:var(--pt-primary); }
+.volume-box input { flex:1; width:100%; min-width:0; height:5px; appearance:none; border:0; outline:0;
+  cursor:pointer; border-radius:10px;
+  background:linear-gradient(to right,var(--pt-primary) 0%,var(--pt-primary) var(--progress,65%),var(--pt-border) var(--progress,65%),var(--pt-border) 100%); }
+.volume-box input::-webkit-slider-thumb { appearance:none; width:16px; height:16px; border:2px solid var(--pt-bg); border-radius:50%; background:var(--pt-primary); box-shadow:0 1px 4px rgba(0,0,0,.18); }
+.volume-box input::-moz-range-thumb { width:13px; height:13px; border:2px solid var(--pt-bg); border-radius:50%; background:var(--pt-primary); }
+.volume-box output { min-width:38px; text-align:right; color:var(--pt-primary); font-size:12px; font-weight:750; font-variant-numeric:tabular-nums; }
+.tablist { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px; padding:3px;
+  background:var(--pt-soft); border:1px solid var(--pt-border); border-radius:12px; margin-bottom:10px; }
+.tab { display:flex; justify-content:center; align-items:center; gap:7px; min-height:35px;
+  padding:6px 9px; border:1px solid transparent; background:transparent; color:var(--pt-muted);
+  border-radius:9px; font-size:12px; font-weight:720; }
+.tab .svg-icon { width:15px; height:15px; }
+ .tab[aria-selected="true"] { background:linear-gradient(120deg,var(--pt-soft-2),var(--pt-soft)); color:var(--pt-primary);
+  border-color:color-mix(in srgb,var(--pt-primary) 40%,var(--pt-border));
+  box-shadow:0 1px 5px color-mix(in srgb,var(--pt-primary) 11%,transparent); }
+.tab-panel { min-width:0; }
+.stage { margin:0; padding:5px 0 6px; min-height:112px; }
+.mic-layout { display:flex; width:100%; align-items:center; justify-content:center; gap:0; min-height:112px; }
+.mic-orbit { display:grid; place-items:center; position:relative; width:112px; height:112px; flex:none; }
+.mic-orbit::before { content:""; position:absolute; inset:0; pointer-events:none;
+  border:1px solid color-mix(in srgb,var(--pt-primary) 45%,var(--pt-border)); border-radius:50%; }
+.mic { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  width:96px; height:96px; padding:8px; border:1px solid color-mix(in srgb,var(--pt-primary) 70%,white);
+  border-radius:50%; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+  color:var(--pt-mic-text,#fff); background:linear-gradient(145deg,var(--pt-mic-from),var(--pt-mic-to));
+  box-shadow:0 6px 20px color-mix(in srgb,var(--pt-glow) 22%,transparent); transition:transform .13s ease; }
+.mic .svg-icon { width:30px; height:30px; stroke-width:1.6; }
+.mic span { display:block; text-align:center; font-size:10px; font-weight:720; line-height:1.25; }
+.mic:hover:not(:disabled) { transform:scale(1.035); }
+.mic:disabled { opacity:.84; }
+.mic:active:not(:disabled) { transform:scale(.965); }
+/* Retain existing recording state hooks for accessibility and JS, but remove
+   the right-hand hint column from the visible Talk layout. */
+.talk-feedback-visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+.hint { margin:0; }
+.counter { margin:0; }
+.stage.recording .mic { background:linear-gradient(135deg,#d62b5b,#f26a54); box-shadow:0 5px 18px rgba(223,49,92,.22); }
+.stage.recording .mic-orbit::before { border-color:var(--error-color,#ed5e75); animation:record-pulse 1.2s ease-out infinite; }
+.stage.sending .mic-orbit::before { border-top-color:transparent; border-width:2px; animation:spin .8s linear infinite; }
+@keyframes record-pulse { 50% { opacity:.35; transform:scale(1.08); } }
+@keyframes spin { to { transform:rotate(360deg); } }
+.actions { display:flex; justify-content:flex-end; gap:7px; margin-top:9px; }
+.action { display:inline-flex; gap:6px; align-items:center; justify-content:center; min-height:36px;
+  padding:7px 12px; border-radius:10px; border:1px solid var(--pt-border); background:var(--pt-soft);
+  font-size:11px; font-weight:720; color:var(--pt-ink); }
+.action .svg-icon { width:14px; height:14px; }
+/* Persistent, red icon-only Stop button; right of the volume slider. */
+.action.stop-action { flex:0 0 40px; width:40px; height:40px; min-height:40px; padding:0;
+  color:#fff; background:linear-gradient(145deg,#c91f45,#9e1736);
+  border:1px solid #eb5571; border-radius:11px;
+  box-shadow:0 3px 10px rgba(159,19,53,.25),inset 0 1px 0 rgba(255,255,255,.20); }
+.action.stop-action .svg-icon { width:19px; height:19px; fill:currentColor; stroke:currentColor; stroke-width:1.4; }
+.action.stop-action:hover:not(:disabled) { background:linear-gradient(145deg,#db2448,#ac1637);
+  box-shadow:0 4px 14px rgba(201,31,69,.35); }
+.action.stop-action:disabled { opacity:.82; filter:none; box-shadow:inset 0 1px 0 rgba(255,255,255,.12); }
+.action.cancel-action { margin-left:auto; }
+.action.cancel-action { color:var(--error-color,#ec657b); }
+.tts-section { padding:0; margin:0; background:transparent; }
+.tts-heading { display:none; }
+.tts-caption { display:block; margin:2px 0 6px; font-size:10px; color:var(--pt-muted); line-height:1.4; overflow-wrap:anywhere; }
+.tts-text { display:block; width:100%; height:76px; min-height:76px; resize:vertical;
+  border:1px solid var(--pt-border); border-radius:11px; padding:10px 11px;
+  font-size:12px; line-height:1.45; color:var(--pt-ink); background:var(--pt-soft); }
+.tts-text::placeholder,.tts-option-input::placeholder { color:var(--pt-muted); opacity:.8; }
+.tts-actions { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.tts-send { display:inline-flex; justify-content:center; align-items:center; gap:6px; min-height:34px;
+  border:0; border-radius:9px; padding:7px 12px; color:var(--pt-on-primary); background:var(--pt-primary);
+  font-size:11px; font-weight:720; }
+.tts-send .svg-icon { width:14px; height:14px; }
+.tts-advanced { flex:1; min-width:140px; font-size:11px; color:var(--pt-muted); }
+.tts-advanced > summary { cursor:pointer; padding:6px 2px; }
+.tts-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:7px 0; }
+.tts-options label { font-size:11px; color:var(--pt-ink); }
+.tts-option-input { width:100%; margin-top:4px; min-width:0; padding:8px;
+  border:1px solid var(--pt-border); border-radius:8px; color:var(--pt-ink); background:var(--pt-soft); font-size:12px; }
+.tts-option-note { display:block; color:var(--pt-muted); font-size:10px; line-height:1.4; }
+/* Toast sits over the TOP of the card, not at the bottom or in layout flow. */
+.toast { display:flex; align-items:flex-start; gap:9px; position:absolute; z-index:20;
+  inset:10px 11px auto; max-height:min(200px,calc(100% - 20px)); overflow-y:auto;
+  padding:11px 10px; margin:0; border-radius:12px;
+  background:var(--pt-bg); color:var(--pt-ink);
+  border:1px solid var(--pt-border); box-shadow:0 10px 32px rgba(0,0,0,.27); }
+.toast:not([hidden]) { animation:toast-drop-in .2s ease-out; }
+@keyframes toast-drop-in { from { opacity:0; transform:translateY(-7px); } to { opacity:1; transform:translateY(0); } }
+.toast.loading { border-left:3px solid var(--pt-primary); }
+.toast.success { border-left:3px solid var(--success-color,#25b781); }
+.toast.error { border-left:3px solid var(--error-color,#ed6071); }
+.status-symbol { display:grid; place-items:center; flex:none; width:21px; height:23px; color:var(--pt-primary); }
+.status-symbol .svg-icon { width:19px; height:19px; }
+.toast.error .status-symbol { color:var(--error-color,#ed6071); }
+.toast.success .status-symbol { color:var(--success-color,#25b781); }
+.status-copy { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.status-content { font-size:12px; line-height:1.4; font-weight:750; overflow-wrap:anywhere; }
+.status-note { color:var(--pt-muted); font-size:10px; line-height:1.4; overflow-wrap:anywhere; }
+.toast-close { display:grid; place-items:center; flex:none; width:25px; height:25px;
+  padding:0; color:var(--pt-muted); background:transparent; border:0; border-radius:7px; }
+.toast-close:hover { background:var(--pt-soft); }
+.toast-close .svg-icon { width:15px; height:15px; }
+.https-notice { display:none!important; }
+.mic-help { margin-top:8px; padding:9px; border:1px solid var(--pt-border); border-radius:10px;
+  color:var(--pt-muted); background:var(--pt-soft); font-size:11px; line-height:1.4; }
+.mic-help > summary { cursor:pointer; font-weight:700; color:var(--pt-primary); }
+.mic-help p { margin:7px 0; }
+.mic-help pre { white-space:pre-wrap; overflow-wrap:anywhere; font:10px/1.5 ui-monospace,monospace; }
+.mic-help a { color:var(--pt-primary); }
+.copy-diagnostics { padding:7px; font-size:11px; border-radius:8px; color:var(--pt-ink);
+  border:1px solid var(--pt-border); background:var(--pt-bg); }
+.metrics,.foot { display:none; }
+:host([data-compact="true"]) .head { min-height:56px; padding:10px 13px; }
+:host([data-compact="true"]) .head .symbol { width:30px; height:30px; }
+:host([data-compact="true"]) .head .symbol .svg-icon { width:18px; height:18px; }
+:host([data-compact="true"]) .panel-body { padding:10px 12px 12px; }
+:host([data-insecure="true"]) .mic { filter:grayscale(.48); opacity:.84; }
+@media (max-width:370px) {
+  .head { padding:11px; gap:8px; }
+  .heading h1 { font-size:13px; }
+  .subtitle { font-size:9px; }
+  .lan-pill { font-size:9px; padding:4px 6px; }
+  .panel-body { padding:11px; }
+  .mic-layout { gap:10px; }
+  .mic-orbit { width:105px; height:105px; }
+  .mic { width:91px; height:91px; }
+  .speaker-availability { font-size:9px; }
+  .tts-actions { align-items:stretch; }
+  .tts-send { flex:1; }
 }
-.hero-glow { position:absolute; pointer-events:none; inset:0; background:
-  radial-gradient(circle at 10% 20%,rgba(255,255,255,.85),transparent 30%),
-  radial-gradient(ellipse at 56% 112%,rgba(255,255,255,.8),transparent 54%),
-  radial-gradient(circle at 100% 2%,rgba(4,86,204,.26),transparent 38%); }
-.hero-waves { position:absolute; pointer-events:none; width:100%; height:115px; left:0; bottom:-1px; opacity:.95; }
-.hero-speaker { position:absolute; width:190px; height:auto; right:-9px; bottom:0px; pointer-events:none;
-  filter:drop-shadow(0 5px 8px rgba(16,55,109,.25)); opacity:.98; }
-.head .symbol { z-index:1; width:96px; height:96px; border:2px solid rgba(255,255,255,.74); border-radius:50%; flex:none;
- background:radial-gradient(circle at 30% 16%,#34e3ff 0%,#087cf1 55%,#0757ed 77%,#7d5ff1 100%);
- box-shadow:0 0 0 5px rgba(255,255,255,.2),0 8px 19px rgba(6,75,178,.38),inset 0 2px 7px rgba(255,255,255,.66); }
-.head .symbol .mark-icon { width:72px; height:72px; filter:drop-shadow(0 3px 2px rgba(4,44,137,.27)); }
-.heading { position:relative; z-index:1; align-self:center; min-width:0; flex:1; margin-right:70px; }
-.heading h1 { font-size:clamp(19px,3.6vw,25px); letter-spacing:-.75px; line-height:1.2; font-weight:850; white-space:nowrap; color:#173159; text-shadow:0 1px 0 rgba(255,255,255,.25); }
-.heading h1 em { font-style:normal; color:#0057cc; }
-.heading .subtitle { font-size:12px; color:#244977; margin:9px 0 0; line-height:1.45; font-weight:530; max-width:330px; }
-.lan-pill { position:absolute; top:13px; right:13px; z-index:3; padding:5px 10px;
- color:#087042; background:linear-gradient(135deg,#d9ffe8,#8cecb5); border:1px solid #6ddfaf;
- box-shadow:0 2px 8px rgba(17,98,76,.12); font-size:11px; }
-.lan-pill .dot { width:7px; height:7px; box-shadow:0 0 0 2px rgba(0,143,84,.1); }
-.lan-pill.unavailable { background:#fff3db; color:#a34b13; border-color:#f6bd63; }
-.lan-pill.busy { background:#eff6ff; color:#0e68c8; border-color:#92c6f8; }
-.panel-body { position:relative; margin-top:-14px; border-radius:26px 26px 0 0;
-  padding:25px 25px 16px; background:linear-gradient(180deg,
-  color-mix(in srgb,var(--pt-card) 81%,#d1dcff 19%) 0%,
-  color-mix(in srgb,var(--pt-card) 92%,#e3ebff 8%) 52%,var(--pt-card) 100%);
-  box-shadow:0 -4px 10px rgba(107,157,217,.08); }
-.section { margin-bottom:17px; }
-.section-top { margin-bottom:9px; }
-.section-title { font-size:14px; font-weight:820; gap:10px; }
-.section-title .svg-icon { width:24px; height:24px; color:#0864e9; fill:#0864e9; stroke-width:1.7; }
-.section-tools { display:flex; align-items:center; gap:5px; }
-.refresh-icon { display:grid; place-items:center; width:31px; height:31px; border:0; border-radius:50%; background:transparent; color:#1173df; cursor:pointer; }
-.refresh-icon:hover:not(:disabled) { background:color-mix(in srgb,var(--pt-primary) 12%,transparent); }
-.refresh-icon:disabled { opacity:.4; cursor:wait; }
-.refresh-icon .svg-icon { width:17px; height:17px; }
-.configure-link { padding:7px 11px; border:1px solid #66a7fa; border-radius:999px;
-  background:color-mix(in srgb,var(--pt-card) 86%,#d8ebff 14%); color:#095fd0;
-  box-shadow:0 2px 7px rgba(28,104,226,.08); font-size:12px; }
-.configure-link:hover { border-color:#1982fb; background:color-mix(in srgb,var(--pt-card) 76%,#c6e6ff 24%); }
-.select-wrap { min-height:58px; border:1px solid color-mix(in srgb,var(--pt-border) 80%,white 20%); border-radius:17px;
-  background:color-mix(in srgb,var(--pt-card) 92%,#ecf4ff 8%);
-  box-shadow:0 3px 9px rgba(35,60,103,.11),inset 0 1px 0 rgba(255,255,255,.55); }
-.select-wrap .device-icon { width:54px; height:48px; margin-inline-start:5px; background:transparent; }
-.nest-mini { display:block; position:relative; width:39px; height:23px; border-radius:50% 50% 42% 42%; transform:perspective(100px) rotateX(6deg);
-  background:radial-gradient(ellipse at 30% 10%,#e8e9ea 0%,#9da5b0 40%,#606b7a 73%,#27344a 100%);
-  box-shadow:0 5px 5px rgba(20,45,76,.21),inset 0 -4px 3px rgba(0,0,0,.19); }
-.nest-mini::after { content:""; position:absolute; inset:auto 3px 1px; height:2px; border-radius:50%; background:linear-gradient(90deg,transparent,#4ecaff,transparent); }
-.select-wrap select { height:58px; padding:12px 148px 12px 4px; font-size:14px; font-weight:800; }
-.select-chevron { width:20px; height:20px; right:12px; color:#244870; }
-.speaker-availability { position:absolute; right:41px; top:50%; display:flex; gap:7px; align-items:center;
- transform:translateY(-50%); font-size:11px; color:var(--pt-muted); pointer-events:none; white-space:nowrap; }
-.speaker-availability .state-dot { width:8px; height:8px; border-radius:50%; background:#9cabc1; }
-.speaker-availability.online .state-dot { background:#00c65d; box-shadow:0 0 0 3px rgba(7,210,109,.09); }
-.speaker-availability.offline .state-dot { background:#f45d63; }
-.speaker-meta { height:0; opacity:0; padding:0; overflow:hidden; }
-.volume-section { margin-top:10px; margin-bottom:8px; }
-.volume-box { border-radius:15px; border:1px solid color-mix(in srgb,var(--pt-border) 73%,#cad6f1 27%);
-  background:color-mix(in srgb,var(--pt-card) 87%,#d5e5ff 13%); min-height:51px; padding:7px 10px 7px 14px; gap:12px; }
-.volume-box .svg-icon { color:#1268c9; width:21px; height:21px; }
-.volume-box .volume-max { width:22px; height:22px; }
-.volume-box input { height:8px; background:linear-gradient(90deg,#1172fa 0%,#00b8f8 var(--progress,65%),color-mix(in srgb,var(--pt-border) 76%,#b8c6e5 24%) var(--progress,65%)); }
-.volume-box input::-webkit-slider-thumb { width:21px; height:21px; background:linear-gradient(135deg,#008bff,#0873e2); border:1px solid #5bcaff; box-shadow:0 2px 5px rgba(29,85,199,.22); }
-.volume-box input::-moz-range-thumb { width:21px; height:21px; background:linear-gradient(135deg,#008bff,#0873e2); border:1px solid #5bcaff; }
-.volume-box output { min-width:51px; padding:8px 10px; border-radius:14px; font-size:14px; color:#064cb7; background:linear-gradient(135deg,#dbecff,#b5d7ff); }
-.stage { margin:0 -25px 1px; padding:8px 12px 5px; isolation:isolate; overflow:visible;
-  background:radial-gradient(ellipse at 50% 48%,rgba(49,169,255,.19),transparent 63%),
-             radial-gradient(ellipse at 87% 55%,rgba(151,109,255,.14),transparent 46%); }
-.stage::before { z-index:-1; top:13px; width:min(100%,550px); height:275px;
-  background:radial-gradient(ellipse at 50% 54%,rgba(3,145,253,.24),transparent 64%); }
-.stage-kicker { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
-.mic-layout { padding:6px 0 0; gap:0; min-height:238px; }
-.wave { z-index:1; flex:1 1 0; min-width:0; width:auto; height:124px; gap:4px; opacity:.78; overflow:visible; }
-.wave span { width:4px; height:var(--h); max-height:100%; flex:1 1 3px;
-  background:linear-gradient(180deg,#8ceaff 0%,#1baafa 46%,#a070f9 100%); transform:scaleY(.7);
-  box-shadow:0 0 7px rgba(46,183,252,.13); }
-.mic-orbit { width:230px; height:230px; }
-.mic-orbit::before { inset:6px; border:3px solid rgba(128,244,255,.55); box-shadow:0 0 24px rgba(57,202,255,.21),inset 0 0 19px rgba(68,176,255,.12); }
-.mic-orbit::after { inset:0; border:2px solid rgba(135,164,255,.35); }
-.mic { width:195px; height:195px; padding:15px; border:4px solid rgba(238,255,255,.96);
-  background:radial-gradient(circle at 65% 24%,#1cccf6 0%,#087bfb 48%,#0860ee 79%,#4d49e6 100%);
-  box-shadow:0 10px 28px rgba(10,93,233,.31),0 0 23px rgba(76,191,255,.42),inset 0 3px 7px rgba(255,255,255,.38),inset 0 -12px 24px rgba(20,50,192,.26); }
-.mic .svg-icon { width:68px; height:68px; stroke-width:1.6; }
-.mic span { font-size:18px; line-height:1.22; font-weight:790; letter-spacing:-.3px; text-shadow:0 1px 4px rgba(2,57,149,.2); }
-.mic:hover:not(:disabled) { transform:scale(1.025); box-shadow:0 13px 37px rgba(10,93,233,.37),0 0 26px rgba(76,191,255,.52); }
-.stage.recording .mic { background:radial-gradient(circle at 20% 18%,#ffb18b,#fc575e 52%,#ce2d86); }
-.stage.sending .mic { filter:grayscale(.22); }
-.hint { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
-.counter { min-height:0; font-weight:700; color:var(--pt-muted); font-size:12px; margin:-2px 0 5px; }
-.stage:not(.recording):not(.sending) .counter { visibility:hidden; height:0; margin:0; }
-.actions { gap:11px; margin:7px 0 0; }
-.action { border-radius:999px; min-height:48px; padding:12px 10px; font-size:14px;
-  background:linear-gradient(150deg,color-mix(in srgb,var(--pt-card) 72%,#dbe1f6 28%),color-mix(in srgb,var(--pt-card) 80%,#d8dbed 20%));
-  border:1px solid color-mix(in srgb,var(--pt-border) 65%,#d2d9e9 35%); }
-.action.stop-action { background:linear-gradient(110deg,#0677ef,#3988e9); border:1px solid #61c8ff; color:#fff; box-shadow:inset 0 1px 1px rgba(255,255,255,.25); }
-.action.stop-action:hover:not(:disabled) { background:linear-gradient(110deg,#006bda,#2584f7); }
-.action .svg-icon { width:17px; height:17px; }
-.action:disabled { opacity:.57; }
-.action.stop-action:disabled { opacity:.9; }
-.status { position:relative; min-height:69px; margin-top:14px; border:1px solid #a0e0b4; border-radius:15px;
-  padding:13px 15px; background:linear-gradient(100deg,#c8f8da,#c5f1e8 68%,#b9eddb);
-  color:#174f33; align-items:center; gap:12px; }
-.status .status-symbol { width:37px; height:37px; border-radius:50%; background:linear-gradient(140deg,#07935d,#00794b); color:white; flex:none; }
-.status .status-symbol .svg-icon { width:23px; height:23px; stroke-width:2.8; }
-.status-copy { display:flex; flex:1; flex-direction:column; gap:3px; min-width:0; }
-.status .status-content { font-size:13px; font-weight:800; line-height:1.32; color:#124b2f; }
-.status small { font-size:11px; line-height:1.35; color:#376957; }
-.status-equalizer { display:flex; align-items:end; height:32px; gap:4px; flex:none; margin-right:2px; opacity:.52; }
-.status-equalizer i { display:block; width:5px; height:6px; border-radius:4px; background:#25bd82; }
-.status-equalizer i:nth-child(2),.status-equalizer i:nth-child(6) { height:12px; }
-.status-equalizer i:nth-child(3),.status-equalizer i:nth-child(5) { height:20px; }
-.status-equalizer i:nth-child(4) { height:28px; }
-.status.success { color:#134f34; border-color:#95deb1; background:linear-gradient(110deg,#c8f8da,#baf0da); }
-.status.success .status-symbol { background:linear-gradient(140deg,#009e62,#006b49); color:#fff; }
-.status.loading { background:linear-gradient(110deg,#dcf0ff,#dcf6ff); border-color:#a5d6ff; }
-.status.loading .status-symbol { background:linear-gradient(140deg,#1471e7,#00b0f3); color:#fff; }
-.status.loading .status-content { color:#184f88; }
-.status.loading small { color:#54718e; }
-.status.error { background:linear-gradient(115deg,#ffebec,#fff3f4); color:#a32140; border-color:#f7b8c6; }
-.status.error .status-symbol { color:#fff; background:linear-gradient(140deg,#eb4568,#b82752); }
-.status.error .status-content { color:#9a2445; }
-.status.error small { color:#9e5064; }
-.status.recording .status-equalizer i,.stage.recording ~ .status .status-equalizer i { animation:equalize .7s ease-in-out infinite alternate; }
-.metrics { margin-top:10px; border-radius:10px; }
-.foot { margin-top:13px; border-top:0; justify-content:center; font-size:10px; gap:6px; padding:0 0 2px; }
-.foot .foot-brand { display:none; }
-:host([data-dark="true"]) .surface { box-shadow:0 22px 56px rgba(0,0,0,.3); }
-:host([data-dark="true"]) .head { background:linear-gradient(115deg,#173e76,#225da0 47%,#172e62 100%); }
-:host([data-dark="true"]) .hero-glow { opacity:.4; }
-:host([data-dark="true"]) .heading h1 { color:#f1f7ff; text-shadow:0 1px 2px rgba(0,0,0,.25); }
-:host([data-dark="true"]) .heading h1 em { color:#79cbff; }
-:host([data-dark="true"]) .heading .subtitle { color:#e0efff; }
-:host([data-dark="true"]) .hero-speaker { opacity:.77; }
-:host([data-dark="true"]) .hero-waves { opacity:.42; }
-:host([data-dark="true"]) .panel-body { background:linear-gradient(180deg,color-mix(in srgb,var(--pt-card) 80%,#1b3d70 20%) 0%,var(--pt-card) 100%); }
-:host([data-dark="true"]) .select-wrap { background:color-mix(in srgb,var(--pt-card) 95%,#254b7f 5%); box-shadow:0 3px 9px rgba(0,0,0,.19); }
-:host([data-dark="true"]) .section-title .svg-icon { color:#63b9ff; fill:#5daffa; }
-:host([data-dark="true"]) .configure-link { color:#8bceff; border-color:#458cd3; }
-:host([data-dark="true"]) .volume-box { background:color-mix(in srgb,var(--pt-card) 89%,#254b7f 11%); }
-:host([data-dark="true"]) .volume-box .svg-icon { color:#8bcfff; }
-:host([data-dark="true"]) .volume-box output { color:#a3d2ff; background:color-mix(in srgb,var(--pt-card) 72%,#3b79cc 28%); }
-:host([data-dark="true"]) .select-chevron { color:var(--pt-muted); }
-:host([data-dark="true"]) .status.success { background:linear-gradient(110deg,#154b40,#1d5b52); border-color:#238f72; }
-:host([data-dark="true"]) .status.success .status-content { color:#d4ffe7; }
-:host([data-dark="true"]) .status.success small { color:#a2e2ca; }
-:host([data-dark="true"]) .status.loading { background:#163b56; border-color:#265e91; }
-:host([data-dark="true"]) .status.loading .status-content { color:#d5edff; }
-:host([data-dark="true"]) .status.loading small { color:#a1cce9; }
-:host([data-dark="true"]) .status.error { background:#512737; border-color:#9b4b5a; }
-:host([data-dark="true"]) .status.error .status-content { color:#ffe0e5; }
-:host([data-dark="true"]) .status.error small { color:#ffd1dc; }
-@media (max-width:620px) {
- .head { height:148px; padding:24px 16px 28px; gap:12px; }
- .head .symbol { width:78px; height:78px; }
- .head .symbol .mark-icon { width:60px; height:60px; }
- .heading { margin-right:48px; }
- .heading h1 { font-size:clamp(15px,3.8vw,22px); }
- .heading .subtitle { font-size:11px; }
- .hero-speaker { width:151px; right:-15px; bottom:0; }
- .panel-body { padding:20px 18px 15px; }
- .stage { margin-left:-18px; margin-right:-18px; }
- .mic-layout { min-height:219px; }
- .mic-orbit { width:215px; height:215px; }
- .mic { width:183px; height:183px; }
- .wave { gap:3px; width:auto; }
- .wave span { width:3px; }
-}
-@media (max-width:430px) {
- .surface { border-radius:22px; }
- .head { height:137px; padding:21px 13px 22px; gap:9px; }
- .head .symbol { width:65px; height:65px; }
- .head .symbol .mark-icon { width:50px; height:50px; }
- .heading { margin-right:38px; }
- .heading h1 { font-size:clamp(14px,3.85vw,17px); white-space:normal; }
- .heading .subtitle { font-size:10px; line-height:1.33; max-width:205px; }
- .hero-desktop-break { display:none; }
- .hero-speaker { width:116px; opacity:.82; right:-29px; }
- .lan-pill { top:7px; right:7px; padding:4px 7px; font-size:9px; }
- .panel-body { padding:18px 12px 13px; border-radius:20px 20px 0 0; }
- .section-title { font-size:12px; gap:6px; }
- .section-title .svg-icon { width:20px; height:20px; }
- .configure-link { font-size:10px; padding:5px 7px; }
- .refresh-icon { width:27px; }
- .section { margin-bottom:15px; }
- .select-wrap { min-height:52px; }
- .select-wrap select { height:52px; font-size:12px; padding:10px 105px 10px 0; }
- .select-wrap .device-icon { width:44px; }
- .nest-mini { width:33px; height:19px; }
- .speaker-availability { right:33px; font-size:9px; }
- .select-chevron { right:9px; width:15px; }
- .volume-box { gap:7px; padding:7px 8px; }
- .volume-box output { min-width:43px; font-size:12px; padding:7px; }
- .volume-box .svg-icon { width:17px; }
- .volume-box .volume-max { width:17px; }
- .stage { margin-left:-12px; margin-right:-12px; }
- .mic-layout { min-height:205px; }
- .mic-orbit { width:205px; height:205px; }
- .mic { width:171px; height:171px; }
- .mic .svg-icon { width:59px; height:59px; }
- .mic span { font-size:16px; }
- .wave { gap:2px; height:112px; }
- .wave span { width:2px; flex:0 0 3px; }
- .wave span:nth-child(even) { display:none; }
- .action { min-height:44px; font-size:12px; padding:10px 6px; }
- .status { padding:11px 10px; gap:8px; }
- .status .status-content { font-size:11px; }
- .status small { font-size:10px; }
- .status-symbol { width:31px; height:31px; }
- .status-equalizer { gap:2px; }
- .status-equalizer i { width:3px; }
- .foot { display:none; }
-}
-@media (max-width:350px) {
- .heading .subtitle { display:none; }
- .head .symbol { width:59px; height:59px; }
- .heading { margin-right:0; }
- .hero-speaker { width:105px; opacity:.5; }
- .wave { display:flex; }
- .mic-orbit { width:185px; height:185px; }
- .mic { width:159px; height:159px; }
- .mic-layout { min-height:190px; }
- .status-equalizer { display:none; }
- .speaker-availability { display:none; }
- .select-wrap select { padding-right:24px; }
+@media (max-width:290px) {
+  .lan-pill,.speaker-availability,.subtitle { display:none; }
+  .mic-layout { gap:5px; }
+  .mic-orbit { width:96px; height:96px; }
+  .mic { width:86px; height:86px; }
 }
 @media (prefers-reduced-motion:reduce) {
- .wave span,.mic,.mic-orbit::before,.mic-orbit::after { animation:none!important; transition:none!important; }
+  *,*::before,*::after { animation:none!important; transition:none!important; }
 }
-.mic-help { margin-top:12px; border:1px solid var(--pt-border); border-radius:13px; padding:12px 14px; background:var(--pt-tint); color:var(--pt-ink); font-size:12px; line-height:1.55; }
-.mic-help[hidden] { display:none; }
-.mic-help summary { color:var(--pt-primary); font-weight:780; cursor:pointer; }
-.mic-help p { margin:7px 0; }
-.mic-help a { color:var(--pt-primary); font-weight:720; }
-.mic-help pre { padding:9px 11px; max-width:100%; overflow-x:auto; white-space:pre-wrap; word-break:break-word; border:1px solid var(--pt-border); border-radius:9px; color:var(--pt-muted); font:11px/1.5 ui-monospace,monospace; }
-.mic-help .copy-diagnostics[hidden] { display:none; }
-.mic-help .copy-diagnostics { display:inline-flex; align-items:center; text-decoration:none; margin-top:2px; border:1px solid var(--pt-border); background:var(--pt-card); color:var(--pt-ink); padding:7px 10px; border-radius:9px; cursor:pointer; font-size:12px; font-weight:730; }
-
-
-/* 2026 Aurora Refresh: speaker-first identity, contiguous hero/body, reactive effects.
-   Decorative effects are CSS only; no timers, remote assets, third-party libraries.
-   Static idle state avoids continuous paints, especially in mobile WebViews. */
-:host {
-  --aurora-ice:#7ceafa; --aurora-blue:#258ffc; --aurora-purple:#997cff;
-  --aurora-border:rgba(128,193,255,.35);
-}
-.surface {
-  background:linear-gradient(145deg,#16396b 0%,#142a4e 58%,#13213f 100%);
-  border-color:rgba(106,175,249,.48);
-  box-shadow:0 18px 56px rgba(8,40,89,.22),0 0 0 1px rgba(123,190,255,.08) inset;
-}
-/* The colored panel below the header is visually part of the same aurora canvas. */
-.head {
-  background:linear-gradient(120deg,#153f7d 0%,#1b5ba7 52%,#15366d 100%);
-  border:0;
-}
-.hero-glow {
-  opacity:1;
-  background:radial-gradient(ellipse at 15% 5%,rgba(166,226,255,.42),transparent 48%),
-             radial-gradient(ellipse at 84% 85%,rgba(106,58,247,.33),transparent 52%),
-             radial-gradient(ellipse at 58% 106%,rgba(37,198,255,.40),transparent 48%);
-}
-.hero-waves { opacity:.55; filter:drop-shadow(0 -2px 5px rgba(65,189,255,.35)); }
-.head .symbol {
-  position:relative; border-radius:28px; border:1px solid rgba(180,232,255,.8);
-  background:linear-gradient(145deg,rgba(39,125,235,.82),rgba(17,46,124,.83));
-  box-shadow:0 0 0 5px rgba(140,206,255,.11),0 12px 25px rgba(3,29,91,.4),inset 0 1px 8px rgba(208,243,255,.24);
-  overflow:visible;
-}
-.head .symbol::before { content:""; position:absolute; inset:-6px; border:1px solid rgba(147,220,255,.24); border-radius:32px; pointer-events:none; }
-.mark-speaker { width:100%; height:100%; object-fit:contain; transform:scale(1.32) translateY(2px); filter:drop-shadow(0 7px 9px rgba(0,14,68,.43)); }
-.mark-cast { position:absolute; bottom:-6px; right:-7px; width:30px; height:30px; display:grid; place-items:center;
-  background:linear-gradient(130deg,#0d82f5,#7759ef); color:#fff; border:1px solid rgba(183,235,255,.8);
-  border-radius:10px; box-shadow:0 4px 14px rgba(1,24,75,.43); }
-.mark-cast .svg-icon { width:19px; height:19px; }
-.hero-speaker { width:185px; right:7px; bottom:-8px; opacity:.87; filter:drop-shadow(0 13px 13px rgba(1,20,63,.5)); }
-.heading h1 { color:#f6faff; text-shadow:0 2px 8px rgba(1,25,78,.28); }
-.heading h1 em { color:#99e6ff; text-shadow:0 0 16px rgba(52,181,255,.35); }
-.heading .subtitle { color:#def3ff; }
-.panel-body {
-  z-index:1;
-  background:
-    radial-gradient(ellipse 115% 44% at 48% 34%,rgba(25,121,233,.21),transparent 64%),
-    radial-gradient(ellipse 85% 52% at 108% 82%,rgba(117,72,206,.18),transparent 67%),
-    radial-gradient(ellipse 70% 32% at -10% 8%,rgba(54,210,255,.14),transparent 68%),
-    linear-gradient(180deg,#173d70 0%,#172b50 19%,#17233f 58%,#131d36 100%);
-  box-shadow:0 -2px 0 rgba(145,213,255,.20),inset 0 13px 25px rgba(35,149,249,.06);
-  color:#ebf6ff;
-}
-.panel-body::before { content:""; position:absolute; inset:0 10px auto; height:1px;
-  background:linear-gradient(90deg,transparent,rgba(124,237,255,.55),transparent); pointer-events:none; }
-.section-title { color:#f0f8ff; font-weight:790; text-shadow:0 1px 4px rgba(0,21,71,.15); }
-.section-title .svg-icon { color:#69d7ff; fill:rgba(88,174,255,.18); }
-.refresh-icon { color:#80d5ff; border-radius:12px; }
-.refresh-icon:hover { color:#fff; background:rgba(73,158,255,.14); }
-.configure-link { color:#bceaff; border-color:rgba(99,193,255,.62); background:linear-gradient(140deg,rgba(41,130,225,.26),rgba(90,70,193,.19)); box-shadow:inset 0 1px 0 rgba(229,248,255,.13); }
-.configure-link:hover { background:rgba(70,149,251,.35); color:#fff; }
-.select-wrap,.volume-box {
-  background:linear-gradient(112deg,rgba(18,43,77,.9),rgba(26,44,79,.74));
-  border:1px solid rgba(117,179,235,.38);
-  box-shadow:0 7px 17px rgba(3,17,52,.19),inset 0 1px 0 rgba(181,226,255,.08);
-  transition:border-color .22s,box-shadow .22s,transform .18s;
-}
-.select-wrap:hover,.volume-box:hover { border-color:rgba(128,224,255,.75); box-shadow:0 8px 21px rgba(1,21,73,.25),0 0 0 2px rgba(78,176,252,.07); }
-.select-wrap select { color:#f4f9ff; }
-.select-wrap select option { color:var(--pt-ink); background:var(--pt-card); }
-.select-chevron { color:#b5d9f8; }
-.select-wrap .device-icon { background:radial-gradient(ellipse,rgba(79,159,236,.23),rgba(18,42,80,.55)); }
-.speaker-availability { color:#bcd1e8; }
-.speaker-meta { color:#b7cde5; }
-.volume-box .svg-icon,.volume-box .volume-max { color:#82d5ff; }
-.volume-box input { background:linear-gradient(90deg,#00c4fa 0%,#148cf8 var(--progress,65%),rgba(154,179,221,.44) var(--progress,65%),rgba(154,179,221,.44) 100%); }
-.volume-box input::-webkit-slider-thumb { box-shadow:0 0 0 4px rgba(38,192,255,.2),0 0 16px rgba(31,159,255,.48); }
-.volume-box output { color:#e4f6ff; background:linear-gradient(135deg,rgba(21,124,227,.48),rgba(109,89,228,.35)); border:1px solid rgba(91,166,255,.28); }
-.stage { background:radial-gradient(ellipse at 50% 49%,rgba(28,163,255,.23),transparent 66%); }
-.stage::before { background:radial-gradient(ellipse at 50% 50%,rgba(33,161,255,.27),transparent 67%); }
-.mic-orbit::before { border-color:rgba(118,241,255,.74); box-shadow:0 0 24px rgba(46,214,255,.23),inset 0 0 17px rgba(87,196,255,.13); }
-.mic-orbit::after { border-color:rgba(155,138,255,.47); }
-.mic {
-  background:radial-gradient(circle at 35% 14%,#23ddfb 0%,#148ef9 36%,#075de7 75%,#633fe2 100%);
-  box-shadow:0 13px 33px rgba(0,69,222,.40),0 0 28px rgba(70,202,255,.46),
-             inset 0 4px 7px rgba(255,255,255,.4),inset 0 -11px 25px rgba(23,35,156,.24);
-}
-.mic:hover:not(:disabled) { box-shadow:0 17px 39px rgba(0,75,233,.46),0 0 38px rgba(66,206,255,.64); }
-.stage.recording .mic-orbit::before { border-color:rgba(255,161,157,.92); box-shadow:0 0 35px rgba(255,79,94,.39); }
-.stage.recording .mic { box-shadow:0 15px 38px rgba(236,57,106,.44),0 0 28px rgba(251,114,111,.43); }
-.stage.sending .mic-orbit::before { border-color:#8cd0ff; }
-.wave span { box-shadow:0 0 10px rgba(54,188,255,.4); }
-/* Buttons remain clearly legible in their disabled state; visual hierarchy remains obvious. */
-.actions { gap:14px; }
-.action { min-height:52px; border-radius:17px; font-size:14px; font-weight:820; letter-spacing:.08px;
-  transition:transform .18s ease,box-shadow .18s ease,filter .18s ease,background .18s ease; }
-.action.cancel-action {
-  color:#ffdce3; border:1px solid rgba(255,132,152,.48);
-  background:linear-gradient(115deg,rgba(109,38,74,.74),rgba(79,37,68,.83));
-  box-shadow:inset 0 1px 0 rgba(255,220,229,.13),0 5px 14px rgba(24,12,44,.16);
-}
-.action.cancel-action .svg-icon { color:#ff9aa9; }
-.action.cancel-action:hover:not(:disabled) { background:linear-gradient(110deg,#a43a67,#c04873); color:white; box-shadow:0 7px 22px rgba(194,71,104,.25); }
-.action.stop-action {
-  color:#fff; border:1px solid #7bd9ff;
-  background:linear-gradient(110deg,#087ced 0%,#2389fb 47%,#705dec 100%);
-  box-shadow:0 5px 20px rgba(28,101,239,.34),inset 0 1px 0 rgba(255,255,255,.38);
-}
-.action.stop-action:hover:not(:disabled) { background:linear-gradient(115deg,#1899ff,#6056f7); box-shadow:0 9px 27px rgba(31,140,255,.48),0 0 13px rgba(114,112,255,.21); }
-.action.stop-action .svg-icon { fill:rgba(255,255,255,.92); stroke:rgba(255,255,255,.92); }
-.action:active:not(:disabled) { transform:translateY(1px) scale(.985); }
-.action:disabled { opacity:.58; filter:saturate(.64); box-shadow:none; }
-.action.stop-action:disabled { opacity:.88; filter:saturate(.8); }
-.status { box-shadow:0 7px 17px rgba(3,22,53,.18),inset 0 1px 0 rgba(255,255,255,.10); }
-.status.success { background:linear-gradient(110deg,#145a59,#206b63 63%,#265b6b); border-color:rgba(88,220,187,.6); }
-.status.success .status-content { color:#e4fff5; }
-.status.success small { color:#b5e9d9; }
-.status.loading { background:linear-gradient(110deg,#183f70,#26547b); border-color:rgba(89,170,242,.62); }
-.status.loading .status-content { color:#edf7ff; }
-.status.loading small { color:#bddcf3; }
-.status.error { background:linear-gradient(110deg,#632744,#422a53); border-color:rgba(243,121,156,.59); }
-.status.error .status-content { color:#fff0f4; }
-.status.error small { color:#ffc3d6; }
-.status-equalizer i { background:#47deb5; }
-.foot { color:#a9bdd9; }
-.foot .svg-icon { color:#55ddac; }
-.mic-help { background:linear-gradient(120deg,rgba(17,47,80,.89),rgba(29,37,67,.91)); border-color:rgba(125,185,244,.31); color:#d9eaff; }
-.mic-help pre { color:#c7d5e9; }
-.metrics { background:rgba(16,49,87,.56); color:#bfdaef; border:1px solid rgba(116,183,240,.18); }
-/* Light HA themes: keep aurora palette while adjusting panel/control contrast. */
-:host([data-dark="false"]) .surface { box-shadow:0 19px 54px rgba(26,77,142,.17); }
-:host([data-dark="false"]) .head { background:linear-gradient(115deg,#2566ac,#327fc8 55%,#184887); }
-:host([data-dark="false"]) .panel-body {
-  background:radial-gradient(ellipse 95% 51% at 44% 41%,rgba(91,166,255,.23),transparent 67%),
-             radial-gradient(ellipse 68% 46% at 105% 78%,rgba(146,122,245,.18),transparent 70%),
-             linear-gradient(180deg,#c3dfff 0%,#daeafa 23%,#e8eeff 63%,#e4ebf7 100%);
-  color:#19375f;
-}
-:host([data-dark="false"]) .section-title { color:#1e416b; text-shadow:none; }
-:host([data-dark="false"]) .section-title .svg-icon { color:#1578dd; }
-:host([data-dark="false"]) .select-wrap,:host([data-dark="false"]) .volume-box {
-  background:linear-gradient(110deg,rgba(255,255,255,.83),rgba(237,247,255,.74));
-  border-color:rgba(93,148,204,.40); box-shadow:0 7px 18px rgba(64,125,186,.12),inset 0 1px 0 white;
-}
-:host([data-dark="false"]) .select-wrap select { color:#203b63; }
-:host([data-dark="false"]) .speaker-availability,:host([data-dark="false"]) .speaker-meta { color:#567393; }
-:host([data-dark="false"]) .volume-box .svg-icon { color:#2787da; }
-:host([data-dark="false"]) .volume-box output { background:linear-gradient(125deg,#b8dbff,#d6eaff); color:#0c57a7; }
-:host([data-dark="false"]) .configure-link { color:#175aa0; border-color:#6bb4ee; background:rgba(234,248,255,.74); }
-:host([data-dark="false"]) .action.cancel-action { color:#8c3d55; background:linear-gradient(115deg,#ffe4eb,#f7d9e5); border-color:#eb9fb2; }
-:host([data-dark="false"]) .action.cancel-action .svg-icon { color:#bc4e6c; }
-:host([data-dark="false"]) .action.cancel-action:hover:not(:disabled) { background:#f3c1d1; color:#8b183b; }
-:host([data-dark="false"]) .status.success { background:linear-gradient(105deg,#c4f5e4,#b8e7e9); border-color:#81d4bb; }
-:host([data-dark="false"]) .status.success .status-content { color:#17654e; }
-:host([data-dark="false"]) .status.success small { color:#376e61; }
-:host([data-dark="false"]) .status.loading { background:linear-gradient(110deg,#d4eaff,#c7effc); border-color:#9ed2f9; }
-:host([data-dark="false"]) .status.loading .status-content { color:#1a557e; }
-:host([data-dark="false"]) .status.loading small { color:#456f90; }
-:host([data-dark="false"]) .status.error { background:linear-gradient(105deg,#ffdae3,#f9e6f4); border-color:#eda9c0; }
-:host([data-dark="false"]) .status.error .status-content { color:#8a2e4c; }
-:host([data-dark="false"]) .status.error small { color:#9b4c65; }
-:host([data-dark="false"]) .foot { color:#527395; }
-:host([data-dark="false"]) .mic-help { background:rgba(242,249,255,.93); color:#254363; }
-:host([data-dark="false"]) .mic-help pre { color:#4e6c89; }
-:host([data-dark="false"]) .metrics { background:rgba(238,247,255,.88); color:#567393; }
-/* Keep the same dark finish if a legacy HA theme reports darkMode=true. */
-:host([data-dark="true"]) .head { background:linear-gradient(120deg,#153d76,#1c5596 52%,#102b60); }
-:host([data-dark="true"]) .panel-body {
-  background:radial-gradient(ellipse 115% 44% at 48% 34%,rgba(25,121,233,.21),transparent 64%),
-    radial-gradient(ellipse 85% 52% at 108% 82%,rgba(117,72,206,.18),transparent 67%),
-    linear-gradient(180deg,#173c70 0%,#172b50 19%,#17233f 58%,#131d36 100%);
-}
-:host([data-dark="true"]) .select-wrap,:host([data-dark="true"]) .volume-box { background:linear-gradient(112deg,rgba(18,43,77,.9),rgba(26,44,79,.74)); }
-:host([data-dark="true"]) .status.success { background:linear-gradient(110deg,#145a59,#206b63 63%,#265b6b); border-color:rgba(88,220,187,.6); }
-:host([data-dark="true"]) .status.success .status-content { color:#e4fff5; }
-:host([data-dark="true"]) .status.success small { color:#b5e9d9; }
-:host([data-dark="true"]) .status.loading { background:linear-gradient(110deg,#183f70,#26547b); }
-:host([data-dark="true"]) .status.loading .status-content { color:#edf7ff; }
-:host([data-dark="true"]) .status.loading small { color:#bddcf3; }
-:host([data-dark="true"]) .status.error { background:linear-gradient(110deg,#632744,#422a53); }
-:host([data-dark="true"]) .status.error .status-content { color:#fff0f4; }
-:host([data-dark="true"]) .status.error small { color:#ffc3d6; }
-@media (max-width:620px) {
- .head .symbol { border-radius:24px; }
- .head .symbol::before { border-radius:28px; }
- .hero-speaker { width:165px; right:-15px; }
- .mark-cast { width:25px; height:25px; bottom:-5px; right:-4px; }
- .mark-cast .svg-icon { width:16px; height:16px; }
- .actions { gap:10px; }
-}
-@media (max-width:430px) {
- .head .symbol { border-radius:19px; }
- .head .symbol::before { border-radius:23px; }
- .hero-speaker { width:119px; right:-28px; }
- .action { min-height:46px; border-radius:13px; font-size:12px; }
-}
-/* Brief feedback motion when an action finishes; recording effects are state-driven. */
-@keyframes aurora-status-in { from { opacity:.73; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
-.status.success,.status.error { animation:aurora-status-in .32s ease-out both; }
-.stage.recording .mic { animation:aurora-record-glow 1.25s ease-in-out infinite alternate; }
-@keyframes aurora-record-glow { from { box-shadow:0 13px 33px rgba(225,43,106,.42),0 0 18px rgba(246,95,107,.35); } to { box-shadow:0 15px 39px rgba(225,43,106,.54),0 0 35px rgba(250,120,119,.67); } }
-@media (prefers-reduced-motion:reduce) { .status.success,.status.error,.stage.recording .mic { animation:none!important; } }
-/* No idle animation. Recording and sending effects remain state-driven. */
-@media (prefers-reduced-motion:reduce) { .action,.select-wrap,.volume-box,.mic { transition:none!important; } }
-
-
-/* Checkable multi-speaker picker; remains usable on mobile and with keyboard. */
-.speaker-picker { display:block; overflow:visible; }
-.speaker-picker > summary { display:flex; align-items:center; min-height:58px; cursor:pointer; list-style:none; gap:5px; }
-.speaker-picker > summary::-webkit-details-marker { display:none; }
-.speaker-picker > summary:focus-visible { outline:2px solid var(--pt-primary); outline-offset:3px; border-radius:14px; }
-.speaker-picker > summary[aria-disabled="true"] { cursor:default; opacity:.65; }
-.speaker-summary-text { min-width:0; flex:1; padding:8px 113px 8px 3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:800; color:var(--pt-ink); }
-.speaker-picker[open] .select-chevron { transform:rotate(180deg); }
-.speaker-picker-body { padding:9px; border-top:1px solid var(--pt-border); }
-.speaker-picker-tools { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:0 0 8px; }
-.speaker-picker-tools button { border:1px solid var(--pt-border); border-radius:8px; background:var(--pt-tint); color:var(--pt-primary); cursor:pointer; padding:7px 10px; font-size:12px; font-weight:750; }
-.speaker-picker-tools button:last-child { margin-inline-start:auto; color:var(--pt-ink); }
-.speaker-picker-tools button:disabled { opacity:.5; cursor:default; }
-.speaker-options { display:grid; gap:5px; max-height:260px; overflow-y:auto; }
-.speaker-option { display:flex; align-items:center; gap:10px; min-height:45px; padding:8px 10px; border-radius:10px; background:var(--pt-tint); border:1px solid transparent; color:var(--pt-ink); cursor:pointer; }
-.speaker-option:has(input:checked) { border-color:color-mix(in srgb,var(--pt-primary) 55%,var(--pt-border)); background:color-mix(in srgb,var(--pt-primary) 10%,var(--pt-card)); }
-.speaker-option:has(input:disabled) { opacity:.55; cursor:not-allowed; }
-.speaker-option input { width:18px; height:18px; flex:none; accent-color:var(--pt-primary); }
-.speaker-option-name { flex:1; min-width:0; font-size:13px; font-weight:720; overflow-wrap:anywhere; }
-.speaker-option small { font-size:10px; color:var(--pt-muted); }
-.speaker-picker-empty { margin:12px 5px; font-size:12px; color:var(--pt-muted); }
-@media (max-width:430px) { .speaker-summary-text { font-size:12px; padding-right:93px; } .speaker-option small { font-size:9px; max-width:92px; text-align:right; } }
-@media (max-width:350px) { .speaker-summary-text { padding-right:24px; } }
-
-/* Lovelace cards: no panel viewport, no global selectors outside shadow DOM. */
-.wrap { min-height:0; display:block; padding:0; }
-.surface { display:block; width:100%; max-width:none; padding:clamp(12px,2.5vw,24px); border-radius:var(--ha-card-border-radius,18px); box-shadow:var(--ha-card-box-shadow,0 2px 8px rgba(0,0,0,.08)); }
-.head { flex-wrap:wrap; }
-.hero-speaker { pointer-events:none; }
-:host([data-compact="true"]) .surface { padding:16px; border-radius:var(--ha-card-border-radius,16px); overflow:visible;
-  background:var(--card-background-color,#fff); color:var(--primary-text-color,#17243a); }
-:host([data-compact="true"]) .section-title { color:var(--primary-text-color,#17243a); text-shadow:none; }
-:host([data-compact="true"]) .hint,
-:host([data-compact="true"]) .counter { color:var(--secondary-text-color,#60738b); }
-:host([data-compact="true"]) .compact-status { color:var(--secondary-text-color,#60738b); }
-:host([data-compact="true"][data-dark="true"]) .surface { background:var(--card-background-color,#1e293b); }
-:host([data-compact="true"][data-dark="true"]) .section-title { color:var(--primary-text-color,#e5ebf5); }
-:host([data-compact="true"]) .surface::before { display:none; }
-:host([data-compact="true"]) .section { margin-bottom:14px; }
-:host([data-compact="true"]) .speaker-summary-text { padding-right:42px; }
-:host([data-compact="true"]) .volume-box { padding:8px 10px; }
-:host([data-compact="true"]) .stage { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:0; margin:12px 0 0; padding:12px; border-radius:14px; }
-:host([data-compact="true"]) .stage::before, :host([data-compact="true"]) .stage::after { display:none; }
-:host([data-compact="true"]) .mic { width:106px; height:106px; min-width:106px; min-height:106px; border-radius:50%; touch-action:none; }
-:host([data-compact="true"]) .mic .svg-icon { width:27px; height:27px; }
-:host([data-compact="true"]) .mic #micText { font-size:12px; }
-:host([data-compact="true"]) .hint { margin:7px 0 2px; font-size:12px; }
-:host([data-compact="true"]) .counter { font-size:11px; }
-:host([data-compact="true"]) .compact-status { font-size:11px; color:var(--pt-muted); line-height:1.5; margin:8px 0 0; padding:0 2px; }
-:host([data-compact="true"]) .compact-status:empty { display:none; }
-:host([data-compact="true"]) .compact-status.error { color:var(--error-color,#e53935); }
-:host([data-compact="true"]) .compact-status.success { color:var(--success-color,#2e8b57); }
-.https-notice { display:none; padding:12px; border-radius:12px; margin:10px 0; font-size:12px; line-height:1.5;
-  border:1px solid color-mix(in srgb,var(--warning-color,#d97706) 35%,var(--pt-border));
-  color:var(--primary-text-color,#243047); background:color-mix(in srgb,var(--warning-color,#d97706) 9%,var(--pt-card)); }
-:host([data-insecure="true"]) .https-notice { display:block; }
-:host([data-insecure="true"]) #mic { opacity:.36; filter:grayscale(80%); cursor:not-allowed; box-shadow:none; }
-:host([data-compact="true"]) .mic-help { margin-top:9px; }
-:host([data-compact="true"]) .section-title { font-size:12px; }
-:host([data-compact="true"]) .select-wrap > summary { min-height:48px; }
-@media (max-width:430px) { .head { gap:8px; } .hero-speaker { width:115px; } .speaker-summary-text { padding-right:33px; } }
-
-/* Text-to-speech controls: also available on HTTP where microphone is disabled. */
-.tts-section { margin-top:18px; padding:16px; border:1px solid var(--pt-border); border-radius:15px; background:var(--pt-tint); }
-.tts-heading { margin:0 0 11px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:14px; font-weight:800; color:var(--pt-ink); }
-.tts-heading .svg-icon { width:19px; height:19px; color:var(--pt-primary); }
-.tts-caption { margin:0 0 9px; font-size:11px; color:var(--pt-muted); overflow-wrap:anywhere; }
-.tts-text { display:block; resize:vertical; width:100%; min-height:92px; padding:12px 13px; border-radius:11px; border:1px solid var(--pt-border); background:var(--pt-card); color:var(--pt-ink); font:inherit; font-size:14px; line-height:1.55; }
-.tts-text:focus-visible, .tts-option-input:focus-visible { outline:2px solid var(--pt-primary); outline-offset:2px; }
-.tts-text::placeholder, .tts-option-input::placeholder { color:var(--pt-muted); opacity:.82; }
-.tts-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; margin-top:10px; }
-.tts-send { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:40px; border:0; border-radius:10px; padding:10px 17px; color:#fff; background:var(--pt-primary); font:inherit; font-size:13px; font-weight:750; cursor:pointer; }
-.tts-send .svg-icon { width:17px; height:17px; }
-.tts-send:hover:not(:disabled) { filter:brightness(1.08); }
-.tts-send:disabled { opacity:.48; cursor:not-allowed; }
-.tts-advanced { min-width:0; font-size:12px; color:var(--pt-muted); }
-.tts-advanced > summary { cursor:pointer; padding:9px 2px; font-weight:700; }
-.tts-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:9px 0 4px; }
-.tts-options label { display:block; min-width:0; font-size:12px; color:var(--pt-ink); font-weight:650; }
-.tts-option-input { margin-top:5px; width:100%; min-width:0; padding:9px 11px; border:1px solid var(--pt-border); border-radius:9px; color:var(--pt-ink); background:var(--pt-card); font:inherit; font-size:13px; }
-.tts-option-note { display:block; font-size:11px; line-height:1.5; margin-top:8px; color:var(--pt-muted); }
-:host([data-compact="true"]) .tts-section { padding:12px; margin:12px 0 0; }
-:host([data-compact="true"]) .tts-heading { font-size:12px; }
-:host([data-compact="true"]) .tts-text { min-height:76px; }
-@media (max-width:390px) { .tts-options { grid-template-columns:1fr; } .tts-actions { align-items:stretch; } .tts-send { width:100%; } }
-
 `;
 // Do not parse the large stylesheet on dashboards that do not contain P2Talk.
 // Resources are global in Lovelace; pay the CSS cost only when a card is mounted.
@@ -841,6 +450,9 @@ class P2TalkGoogleCastCard extends HTMLElement {
     this._selectionInitialized = false;
     this._recordingSpeakerIds = null;
     this._timer = null;
+    this._toastTimer = null;
+    this._activeTab = null;
+    this._lastStatus = null;
     this._started = 0;
   }
 
@@ -849,8 +461,26 @@ class P2TalkGoogleCastCard extends HTMLElement {
         (!Array.isArray(config.speakers) || !config.speakers.every((id) => typeof id === "string")))) {
       throw new Error("P2Talk: cấu hình 'speakers' phải là danh sách entity_id.");
     }
+    if (config.default_tab != null && !["talk", "tts"].includes(config.default_tab)) {
+      throw new Error("P2Talk: 'default_tab' phải là 'talk' hoặc 'tts'.");
+    }
+    if (config.color_theme != null && !COLOR_THEMES.includes(config.color_theme)) {
+      throw new Error("P2Talk: 'color_theme' phải là ha, aurora, ocean, sunset, emerald hoặc graphite.");
+    }
+    if (config.notification_duration != null &&
+        (!Number.isInteger(config.notification_duration) || config.notification_duration < 0 || config.notification_duration > 60)) {
+      throw new Error("P2Talk: 'notification_duration' phải từ 0 đến 60 giây.");
+    }
     const previous = this._config;
     this._config = { ...config };
+    this._applyColorTheme();
+    if (previous.default_tab !== config.default_tab && this._loaded && this.isConnected) {
+      this._setTab(config.default_tab || "talk");
+    }
+    if (this._toastTimer && this.$?.("status") && !this.$("status").hidden) {
+      // A change to the delay applies to the currently visible notification.
+      if (previous.notification_duration !== config.notification_duration) this._hideToast();
+    }
     const preferencesChanged = previous.name !== config.name ||
       JSON.stringify(previous.speakers || []) !== JSON.stringify(config.speakers || []);
     if (preferencesChanged) this._selectionInitialized = false;
@@ -863,10 +493,8 @@ class P2TalkGoogleCastCard extends HTMLElement {
   }
   static getConfigElement() { return document.createElement("p2talk-google-cast-editor"); }
   static getStubConfig() { return {}; }
-  getCardSize() { return this._compact ? 8 : 15; }
-  getGridOptions() { return this._compact
-    ? { columns:6, min_columns:6 }
-    : { columns:12, min_columns:6 }; }
+  getCardSize() { return this._compact ? 5 : 6; }
+  getGridOptions() { return { columns:6, min_columns:6 }; }
   get hass() { return this._hass; }
   set hass(hass) {
     const previous = this._hass;
@@ -908,6 +536,9 @@ class P2TalkGoogleCastCard extends HTMLElement {
     const identity = `${this._compact ? "compact" : "full"}:${this._config.name || "default"}:${(this._config.speakers || []).join(",")}`;
     return `${STORAGE_PREFIX}speakers_${identity.slice(0, 120)}`;
   }
+  _applyColorTheme() {
+    this.setAttribute("data-color-theme", this._config.color_theme || "ha");
+  }
   _applyTitle() {
     const label = typeof this._config?.name === "string" ? this._config.name.trim() : "";
     const title = this.shadowRoot?.getElementById(this._compact ? "compactTitle" : "fullTitle");
@@ -937,76 +568,89 @@ class P2TalkGoogleCastCard extends HTMLElement {
     // The DOM is rebuilt below, so fetch fresh speakers and restore selections.
     this._loaded = false;
     this._speakerStateSignature = null;
+    if (!this.hasAttribute("data-dark")) {
+      const prefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      this.setAttribute("data-dark", String(prefersDark));
+    }
+    this._applyColorTheme();
     if (this._compact) this.setAttribute("data-compact", "true");
     // One parsed stylesheet shared across all instances; no per-card CSS parse.
     const sheet = getSharedSheet();
     const canAdopt = !!sheet && "adoptedStyleSheets" in this.shadowRoot;
     if (canAdopt) this.shadowRoot.adoptedStyleSheets = [sheet];
-    this.shadowRoot.innerHTML = (canAdopt ? "" : `<style>${styles}</style>`) +
-      (this._compact ? `
-      <ha-card class="surface">
-        <section class="section speaker-section" aria-label="Chọn loa Google Cast">
-          <div class="section-top"><label class="section-title">${icon("speaker")} <span id="compactTitle">P2Talk Google Cast</span></label></div>
-          <details class="select-wrap speaker-picker" id="speaker">
-            <summary id="speakerSummary" aria-label="Chọn một hoặc nhiều loa Google Cast"><span class="device-icon" aria-hidden="true">${icon("speaker")}</span><span class="speaker-summary-text" id="speakerSummaryText">Đang tải loa...</span>${icon("chevron","select-chevron")}</summary>
-            <div class="speaker-picker-body"><div class="speaker-picker-tools"><button type="button" id="selectAll">Chọn tất cả</button><button type="button" id="selectNone">Bỏ chọn</button><button type="button" id="speakerDone">Xong</button></div><div class="speaker-options" id="speakerOptions" role="group" aria-label="Danh sách loa đã cấu hình"></div></div>
-          </details>
-        </section>
-        <section class="section volume-section" aria-label="Âm lượng phát">
-          <div class="section-top"><label for="volume" class="section-title">${icon("volume")} Âm lượng</label></div>
-          <div class="volume-box">${icon("volume")}<input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng phát" style="--progress:65%"/><output id="volumeText" for="volume">65%</output></div>
-        </section>
-        <section class="stage" id="stage" aria-label="Nhấn giữ để nói"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br/>để nói</span></button><p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát</div></section>
-        ${ttsMarkup()}
-        <div class="https-notice" id="httpsNotice" role="note">Không thể ghi âm qua HTTP. Hãy truy cập Home Assistant bằng HTTPS hợp lệ để bật nút micro. Tính năng nhập văn bản TTS vẫn hoạt động. P2Talk không tự chuyển trang.</div>
-        <div id="status" class="compact-status" role="status" aria-live="polite"></div>
-        <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro</summary><p id="micAction"></p><pre id="micDetails"></pre><button id="micCopy" type="button">Sao chép chẩn đoán</button></details>
-      </ha-card>` : `
+    const talkPanel = `<div class="tab-panel" id="panelTalk" role="tabpanel" aria-labelledby="tabTalk">
+      <section class="stage" id="stage" aria-label="Nhấn giữ để nói">
+        <div class="mic-layout"><div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br>để nói</span></button></div></div>
+        <div class="talk-feedback-visually-hidden"><p id="hint" class="hint">Nhấn giữ để nói</p><p id="counter" class="counter" aria-live="off"></p></div>
+      </section>
+    </div>`;
+    const ttsPanel = `<div class="tab-panel" id="panelTts" role="tabpanel" aria-labelledby="tabTts" hidden>${ttsMarkup()}</div>`;
+    this.shadowRoot.innerHTML = (canAdopt ? "" : `<style>${styles}</style>`) + `
       <div class="wrap"><ha-card class="surface">
-        <header class="head">
-          <div class="hero-glow" aria-hidden="true"></div>
-          <svg class="hero-waves" viewBox="0 0 680 170" preserveAspectRatio="none" aria-hidden="true"><path d="M0 110C116 190 214 92 333 139S522 104 680 149V170H0Z" fill="#e8f6ff" opacity=".37"/><path d="M0 128C158 200 237 103 364 154S554 83 680 132V170H0Z" fill="#38baf5" opacity=".27"/><path d="M0 155C158 112 234 163 327 143S531 179 680 118V170H0Z" fill="#0797ea" opacity=".36"/></svg>
-          <img class="hero-speaker" src="/${DOMAIN}_assets/home-speaker-2026.webp" alt="" aria-hidden="true" loading="lazy" decoding="async" />
-          <div class="symbol" aria-hidden="true"><img class="mark-speaker" src="/${DOMAIN}_assets/home-speaker-2026.webp" alt="" decoding="async"/><span class="mark-cast">${icon("cast")}</span></div>
-          <div class="heading"><h1 id="fullTitle">P2Talk Google Cast</h1><p class="subtitle">Nhấn giữ để nói, thả để phát giọng nói<br class="hero-desktop-break"/> lên loa Google Cast ngay trong Home Assistant</p></div>
-          <span class="lan-pill" id="connectionPill"><span class="dot"></span><span id="connectionLabel">Đang kết nối</span></span>
+        <header class="head"><div class="symbol" aria-hidden="true">${icon("cast")}</div>
+          <div class="heading"><h1 id="${this._compact ? "compactTitle" : "fullTitle"}">P2Talk Google Cast</h1>
+          <p class="subtitle">Talk · TTS · Google Cast</p></div>
+          <button type="button" class="lan-pill" id="connectionPill" title="Xem thông báo gần nhất" aria-label="Xem thông báo gần nhất"><span class="dot"></span><span id="connectionLabel">Đang tải</span></button>
         </header>
         <div class="panel-body">
-        <section class="section speaker-section" aria-label="Thiết bị phát">
-          <div class="section-top"><span class="section-title">${icon("volume")} Chọn loa Google Cast</span>
-          <span class="section-tools"><button type="button" class="refresh-icon" id="refresh" title="Làm mới danh sách loa" aria-label="Làm mới danh sách loa">${icon("refresh")}</button><a class="small-link configure-link" id="configure" href="/config/integrations/integration/p2talk_google_cast" title="Cấu hình, thêm, sửa hoặc xóa loa">${icon("settings")} Quản lý loa</a></span></div>
-          <details class="select-wrap speaker-picker" id="speaker">
-            <summary id="speakerSummary" aria-label="Chọn một hoặc nhiều loa Google Cast"><span class="device-icon" aria-hidden="true"><span class="nest-mini"></span></span><span class="speaker-summary-text" id="speakerSummaryText">Đang tải loa...</span><span class="speaker-availability" id="inlineState" aria-hidden="true"><i class="state-dot"></i><span id="inlineStateText">Đang tải</span></span>${icon("chevron","select-chevron")}</summary>
-            <div class="speaker-picker-body"><div class="speaker-picker-tools"><button type="button" id="selectAll">Chọn tất cả</button><button type="button" id="selectNone">Bỏ chọn</button><button type="button" id="speakerDone">Xong</button></div><div class="speaker-options" id="speakerOptions" role="group" aria-label="Danh sách loa đã cấu hình"></div></div>
-          </details>
-          <div class="speaker-meta" id="speakerMeta"><span class="state-dot"></span><span id="speakerState">Đang kiểm tra thiết bị...</span></div>
-        </section>
-        <section class="section volume-section" aria-label="Âm lượng phát"><div class="section-top"><label for="volume" class="section-title">${icon("volume")} Âm lượng chung cho loa đã chọn</label></div>
-          <div class="volume-box">${icon("volume")}<input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng phát" style="--progress:65%"/>${icon("volume", "volume-max")}<output id="volumeText" for="volume">65%</output></div>
-        </section>
-        <section class="stage" id="stage" aria-label="Nhấn giữ để nói">
-          <div class="stage-kicker">${icon("wifi")} Kết nối qua Home Assistant</div>
-          <div class="mic-layout">${waveMarkup()}<div class="mic-orbit"><button id="mic" class="mic" type="button" disabled aria-label="Nhấn giữ để ghi âm, thả để gửi đến loa" title="Nhấn giữ để nói">${icon("mic")}<span id="micText">Nhấn giữ<br/>để nói</span></button></div>${waveMarkup()}</div>
-          <p id="hint" class="hint">Nhấn giữ để nói</p><div id="counter" class="counter">Thả nút để phát đến loa đã chọn</div>
-        </section>
-        ${ttsMarkup()}
-        <div class="https-notice" id="httpsNotice" role="note">Microphone chỉ hoạt động khi truy cập Home Assistant bằng HTTPS. Bạn đang mở qua HTTP; hãy mở dashboard bằng URL HTTPS hợp lệ. Tính năng nhập văn bản TTS vẫn hoạt động. P2Talk sẽ không tự chuyển trang.</div>
-        <div class="actions"><button type="button" class="action cancel-action" id="cancel" disabled>${icon("close")} Hủy</button>
-        <button type="button" class="action stop-action" id="stop" disabled>${icon("stop")} Dừng các loa</button></div>
-        <div id="status" class="status loading" role="status" aria-live="polite"><div id="statusIcon" class="status-symbol">${icon("refresh")}</div><div class="status-copy"><strong id="statusText" class="status-content">Đang kết nối Home Assistant...</strong><small id="statusNote">Đang kiểm tra quyền truy cập và thiết bị.</small></div><span class="status-equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
-        <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán micro & cách khắc phục</summary>
-          <p id="micAction"></p><pre id="micDetails"></pre>
-          <button id="micCopy" type="button" class="copy-diagnostics">Sao chép chẩn đoán</button>
-          <p><a href="https://www.home-assistant.io/docs/configuration/remote/" target="_blank" rel="noopener noreferrer">Hướng dẫn HTTPS/Home Assistant</a></p>
-          <p>Lỗi ghi âm xảy ra ở thiết bị đang mở giao diện; nó có thể không xuất hiện trong log Home Assistant Core.</p>
-        </details>
-        <div id="metrics" class="metrics" aria-live="polite"></div>
-        <footer class="foot"><span class="privacy">${icon("lock")} Âm thanh qua phiên Home Assistant đã đăng nhập · Không cần token</span><span class="foot-brand">P2Talk · Google Cast</span></footer>
+          <section class="section speaker-section" aria-label="Chọn loa Google Cast">
+            <div class="section-top"><span class="section-title">${icon("speaker")} Chọn loa Google Cast</span>
+              <span class="section-tools"><button type="button" class="refresh-icon" id="refresh" title="Làm mới danh sách loa" aria-label="Làm mới danh sách loa">${icon("refresh")}</button>
+                <a class="small-link configure-link" id="configure" href="/config/integrations/integration/p2talk_google_cast" title="Quản lý loa Google Cast">${icon("settings")}<span>Quản lý</span></a></span></div>
+            <details class="select-wrap speaker-picker" id="speaker">
+              <summary id="speakerSummary" aria-label="Chọn một hoặc nhiều loa Google Cast"><span class="device-icon" aria-hidden="true">${icon("speaker")}</span>
+                <span class="speaker-summary-text" id="speakerSummaryText">Đang tải loa...</span>
+                <span class="speaker-availability" id="inlineState" aria-hidden="true"><i class="state-dot"></i><span id="inlineStateText">Đang tải</span></span>${icon("chevron","select-chevron")}</summary>
+              <div class="speaker-picker-body"><div class="speaker-picker-tools"><button type="button" id="selectAll">Chọn tất cả</button><button type="button" id="selectNone">Bỏ chọn</button><button type="button" id="speakerDone">Xong</button></div>
+                <div class="speaker-options" id="speakerOptions" role="group" aria-label="Danh sách loa Google Cast"></div></div>
+            </details>
+            <div class="speaker-meta" id="speakerMeta"><span id="speakerState"></span></div>
+          </section>
+          <section class="section volume-section" aria-label="Âm lượng chung cho loa đã chọn">
+            <div class="volume-row"><div class="volume-box">${icon("volume")}
+              <input id="volume" type="range" min="5" max="100" value="65" aria-label="Âm lượng chung cho loa đã chọn" style="--progress:65%"/>
+              <output id="volumeText" for="volume">65%</output></div>
+              <button type="button" class="action stop-action" id="stop" disabled
+                title="Dừng phát trên các loa đã chọn" aria-label="Dừng phát trên các loa đã chọn">${icon("stop")}</button>
+            </div>
+          </section>
+          <div class="tablist" role="tablist" aria-label="Chọn chế độ phát">
+            <button type="button" class="tab" id="tabTalk" role="tab" aria-controls="panelTalk" aria-selected="true" tabindex="0">${icon("mic")} Talk</button>
+            <button type="button" class="tab" id="tabTts" role="tab" aria-controls="panelTts" aria-selected="false" tabindex="-1">${icon("send")} TTS</button>
+          </div>
+          ${talkPanel}${ttsPanel}
+          <div class="actions" id="recordActions" hidden><button type="button" class="action cancel-action" id="cancel" disabled hidden>${icon("close")} Hủy ghi âm</button></div>
+          <div class="https-notice" id="httpsNotice" hidden></div>
+          <details id="micHelp" class="mic-help" hidden><summary>Chẩn đoán microphone</summary><p id="micAction"></p><pre id="micDetails"></pre>
+            <button id="micCopy" type="button" class="copy-diagnostics">Sao chép chẩn đoán</button>
+            <p><a href="https://www.home-assistant.io/docs/configuration/remote/" target="_blank" rel="noopener noreferrer">Hướng dẫn kết nối HTTPS</a></p></details>
+          <div id="metrics" class="metrics" hidden></div>
         </div>
-      </ha-card></div>`);
+        <div id="status" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden>
+          <span id="statusIcon" class="status-symbol">${icon("info")}</span>
+          <span class="status-copy"><strong id="statusText" class="status-content"></strong><small id="statusNote" class="status-note"></small></span>
+          <button type="button" id="toastClose" class="toast-close" aria-label="Đóng thông báo">${icon("close")}</button>
+        </div>
+      </ha-card></div>`;
     this.$ = (id) => this.shadowRoot.getElementById(id);
     this._applyTitle();
     this._applyTtsConfig();
+    this._setTab(this._config.default_tab || "talk");
+    this.$("toastClose").addEventListener("click", () => this._hideToast());
+    this.$("connectionPill").addEventListener("click", () => {
+      if (this._lastStatus) this._status(...this._lastStatus);
+    });
+    for (const name of ["talk", "tts"]) {
+      const tab = this.$(name === "talk" ? "tabTalk" : "tabTts");
+      tab.addEventListener("click", () => this._setTab(name));
+      tab.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === "Home" ? "talk" : event.key === "End" ? "tts" : name === "talk" ? "tts" : "talk";
+        this._setTab(next);
+        this.$(next === "talk" ? "tabTalk" : "tabTts").focus();
+      });
+    }
     this.$("ttsText").value = this._ttsText;
     this.$("ttsLanguage").value = this._ttsLanguage;
     this.$("ttsVoice").value = this._ttsVoice;
@@ -1082,6 +726,8 @@ class P2TalkGoogleCastCard extends HTMLElement {
 
   disconnectedCallback() {
     if (this._visibilityHandler) document.removeEventListener("visibilitychange", this._visibilityHandler);
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    this._toastTimer = null;
     if (this._timer) clearInterval(this._timer);
     this._timer = null;
     this._pressed = false;
@@ -1096,24 +742,52 @@ class P2TalkGoogleCastCard extends HTMLElement {
     this._ttsSending = false;
   }
 
-  _status(message, type = "", note = null) {
-    const el = this.$("status");
-    if (!el) return;
-    if (this._compact) {
-      el.textContent = message;
-      el.className = `compact-status ${type}`;
-      return;
+  _setTab(tab) {
+    if (!this.$ || (this._recording || this._pressed || this._sending || this._ttsSending)) return;
+    this._activeTab = tab === "tts" ? "tts" : "talk";
+    const talk = this._activeTab === "talk";
+    for (const [id, selected] of [["tabTalk", talk], ["tabTts", !talk]]) {
+      const button = this.$(id);
+      if (!button) continue;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
     }
+    if (this.$("panelTalk")) this.$("panelTalk").hidden = !talk;
+    if (this.$("panelTts")) this.$("panelTts").hidden = talk;
+  }
+
+  _hideToast() {
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    this._toastTimer = null;
+    const el = this.$?.("status");
+    if (el) el.hidden = true;
+  }
+
+  _status(message, type = "", note = null) {
+    const el = this.$?.("status");
+    if (!el) return;
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    this._toastTimer = null;
+    this._lastStatus = [message, type, note];
     this.$("statusText").textContent = message;
     this.$("statusIcon").innerHTML = icon(type === "success" ? "check" : type === "error" ? "alert" : type === "loading" ? "refresh" : "info");
     const secondary = this.$("statusNote");
-    secondary.textContent = note ?? (type === "success" ? "Âm thanh được gửi qua phiên Home Assistant đã đăng nhập." : type === "error" ? "Kiểm tra kết nối thiết bị và Settings → System → Logs." : type === "loading" ? "Đang xử lý yêu cầu của bạn..." : "Chọn loa và nhấn giữ nút micro để nói.");
+    secondary.textContent = note ?? (type === "error" ? "Kiểm tra kết nối, cấu hình thiết bị hoặc nhật ký Home Assistant." : "");
+    secondary.hidden = !secondary.textContent;
+    el.className = `toast ${type}`;
+    el.hidden = false;
+    el.setAttribute("role", type === "error" ? "alert" : "status");
+    el.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
     const pill = this.$("connectionPill");
     if (pill) {
       pill.className = `lan-pill ${type === "error" ? "unavailable" : type === "loading" ? "busy" : ""}`;
-      this.$("connectionLabel").textContent = type === "error" ? "Cần kiểm tra" : type === "loading" ? "Đang xử lý" : "Đã sẵn sàng";
+      this.$("connectionLabel").textContent = type === "error" ? "Cần kiểm tra" : type === "loading" ? "Đang xử lý" : "Sẵn sàng";
     }
-    el.className = `status ${type}`;
+    // Loading stays until an action finishes; other messages auto-dismiss.
+    const duration = this._config.notification_duration ?? 5;
+    if (type !== "loading" && duration > 0) {
+      this._toastTimer = setTimeout(() => this._hideToast(), duration * 1000);
+    }
   }
 
   _speakerAvailable(speaker) {
@@ -1145,6 +819,10 @@ class P2TalkGoogleCastCard extends HTMLElement {
     // Keep the pressed button operable for pointerup during recording.
     if (this._recording && this._secureMicrophoneOrigin()) this.$("mic").disabled = false;
     const locked = this._recording || this._sending || this._ttsSending;
+    this.$("tabTalk").disabled = locked;
+    this.$("tabTts").disabled = locked;
+    this.$("cancel").hidden = !this._recording;
+    this.$("recordActions").hidden = !this._recording;
     this.$("ttsSend").disabled = locked || !selected || !this._hass || !this.$("ttsText").value.trim();
     this.$("ttsText").disabled = this._ttsSending;
     this.$("ttsLanguage").disabled = this._ttsSending;
@@ -1283,7 +961,7 @@ class P2TalkGoogleCastCard extends HTMLElement {
     const advice = microphoneAdvice(error, environment);
     const help = this.$("micHelp");
     help.hidden = false;
-    help.open = true;
+    help.open = false;
     this.$("micAction").textContent = advice.code === "insecure_context"
       ? "Mở Home Assistant qua HTTPS hợp lệ. P2Talk không tự chuyển địa chỉ và không thể bật microphone qua HTTP."
       : advice.action;
@@ -1570,12 +1248,29 @@ class P2TalkGoogleCastEditor extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>
       :host{display:block;color:var(--primary-text-color);font:inherit}
       label{display:block;font-size:14px;margin:10px 0}
-      input[type=text]{box-sizing:border-box;width:100%;padding:9px;border:1px solid var(--divider-color);border-radius:8px;background:var(--card-background-color);color:inherit}
+      input[type=text],select{box-sizing:border-box;width:100%;padding:9px;border:1px solid var(--divider-color);border-radius:8px;background:var(--card-background-color);color:inherit}
       .choices{max-height:220px;overflow:auto}.choices label{display:flex;gap:8px;align-items:center}
       p{font-size:12px;color:var(--secondary-text-color)}
+      .theme-swatches{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+      .swatch{height:22px;min-width:44px;flex:1;border-radius:8px;border:1px solid var(--divider-color);cursor:pointer;box-shadow:inset 0 1px 0 #ffffff30}
+      .swatch[aria-pressed="true"]{outline:2px solid var(--primary-color,#1976d2);outline-offset:2px}
+      .swatch:focus-visible{outline:3px solid var(--primary-color,#1976d2)}
     </style><label>Tên thẻ <input id="name" type="text" placeholder="P2Talk Google Cast" /></label>
     <label>Bộ TTS (entity_id) <input id="ttsEntity" type="text" placeholder="tts.wyoming_vietnamese" /></label>
-    <p>Nếu để trống, dùng tts.wyoming_vietnamese. Language và Voice có thể nhập trực tiếp trên thẻ khi cần phát.</p>
+    <label>Mẫu màu giao diện <select id="colorTheme">
+      <option value="ha">Theo theme Home Assistant</option>
+      <option value="aurora">Aurora — Tím cực quang</option>
+      <option value="ocean">Ocean — Xanh biển công nghệ</option>
+      <option value="sunset">Sunset — Cam san hô</option>
+      <option value="emerald">Emerald — Ngọc lục bảo</option>
+      <option value="graphite">Graphite — Than chì sang trọng</option>
+    </select></label>
+    <div id="themeSwatches" class="theme-swatches" aria-label="Xem trước màu chủ đạo"></div>
+    <p>Các mẫu màu tự đổi bảng màu theo giao diện sáng/tối của Home Assistant. Chỉ tác động đến thẻ này.</p>
+    <label>Tab mặc định khi mở thẻ <select id="defaultTab"><option value="talk">Talk — Nhấn giữ để nói</option><option value="tts">TTS — Nhập văn bản</option></select></label>
+    <label>Thời gian tự ẩn thông báo <select id="notificationDuration"><option value="3">3 giây</option><option value="5">5 giây (mặc định)</option><option value="8">8 giây</option><option value="12">12 giây</option><option value="20">20 giây</option><option value="0">Không tự ẩn (đóng thủ công)</option></select></label>
+    <p>Cảnh báo và trạng thái được hiển thị nổi trong thẻ, không làm tăng chiều cao. Thông báo đang xử lý sẽ hiển thị cho đến khi hoàn tất.</p>
+    <p>Nếu để trống, dùng tts.wyoming_vietnamese. Language và Voice có thể nhập trực tiếp trên tab TTS.</p>
     <p>Chọn loa mặc định (để trống sẽ tự chọn loa đang khả dụng hoặc dùng lựa chọn đã lưu).</p>
     <div id="choices" class="choices"></div>`;
     this.shadowRoot.getElementById("name").value = this._config.name || "";
@@ -1591,6 +1286,41 @@ class P2TalkGoogleCastEditor extends HTMLElement {
       if (event.target.value.trim()) next.tts_entity = event.target.value.trim();
       else delete next.tts_entity;
       this._emit(next);
+    });
+    const colorTheme = this.shadowRoot.getElementById("colorTheme");
+    colorTheme.value = this._config.color_theme || "ha";
+    const swatchWrap = this.shadowRoot.getElementById("themeSwatches");
+    const swatchColors = {
+      ha:["#3f536b","#73c6ef"], aurora:["#633fb1","#9bdaf6"], ocean:["#0055a4","#45cce9"],
+      sunset:["#b63752","#ffbd89"], emerald:["#04775d","#92f1be"], graphite:["#293342","#e6c76c"]
+    };
+    const chooseTheme = (id) => {
+      colorTheme.value = id;
+      for (const button of swatchWrap.children) button.setAttribute("aria-pressed", String(button.dataset.theme === id));
+      this._emit({...this._config, color_theme:id});
+    };
+    for (const [id, colors] of Object.entries(swatchColors)) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "swatch";
+      button.dataset.theme = id;
+      button.setAttribute("aria-label", `Xem mẫu màu ${id}`);
+      button.title = id === "ha" ? "Theo Home Assistant" : id;
+      button.setAttribute("aria-pressed", String(colorTheme.value === id));
+      button.style.background = `linear-gradient(120deg, ${colors.join(", ")})`;
+      button.addEventListener("click", () => chooseTheme(id));
+      swatchWrap.append(button);
+    }
+    colorTheme.addEventListener("change", (event) => chooseTheme(event.target.value));
+    const defaultTab = this.shadowRoot.getElementById("defaultTab");
+    defaultTab.value = this._config.default_tab || "talk";
+    defaultTab.addEventListener("change", (event) => {
+      this._emit({...this._config, default_tab:event.target.value});
+    });
+    const notificationDuration = this.shadowRoot.getElementById("notificationDuration");
+    notificationDuration.value = String(this._config.notification_duration ?? 5);
+    notificationDuration.addEventListener("change", (event) => {
+      this._emit({...this._config, notification_duration:Number(event.target.value)});
     });
     const choices = this.shadowRoot.getElementById("choices");
     for (const speaker of this._speakers) {
@@ -1621,8 +1351,8 @@ if (!customElements.get("p2talk-google-cast-editor"))
 
 window.customCards = window.customCards || [];
 for (const definition of [
-  {type:"p2talk-google-cast-card",name:"P2Talk Google Cast — Full",description:"Ghi âm, TTS từ văn bản, phát và dừng Google Cast; toàn bộ giao diện P2Talk.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
-  {type:"p2talk-google-cast-compact-card",name:"P2Talk Google Cast — Compact",description:"Chọn loa, âm lượng, nhấn giữ để nói hoặc nhập văn bản TTS.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
+  {type:"p2talk-google-cast-card",name:"P2Talk Google Cast — Full",description:"Thẻ gọn với hai tab Talk / TTS, thông báo tự ẩn và điều khiển Google Cast.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
+  {type:"p2talk-google-cast-compact-card",name:"P2Talk Google Cast — Compact",description:"Thẻ tối giản, hai tab Talk / TTS, hỗ trợ loa và thông báo nổi.",preview:false,documentationURL:"https://github.com/khaisilk1910/P2Talk-Google-Cast#readme"},
 ]) {
   if (!window.customCards.some((card) => card.type === definition.type))
     window.customCards.push(definition);
